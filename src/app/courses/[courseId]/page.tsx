@@ -135,11 +135,4 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   );
 }
 
-export async function generateStaticParams() {
-  // This might need adjustment if courses are purely dynamic from Firestore
-  // For now, keeping it based on placeholder for build-time generation if some courses are known
-  const { placeholderCourses } = await import('@/lib/data');
-  return placeholderCourses.map(course => ({
-    courseId: course.id,
-  }));
-}
+// generateStaticParams has been removed from this file.
