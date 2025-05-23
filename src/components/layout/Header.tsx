@@ -1,4 +1,5 @@
 
+
 "use client"; // For handling auth state, though mocked for now
 
 import Link from 'next/link';
@@ -9,22 +10,33 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 
+// Mock admin state - in a real app, this would come from user roles/permissions
+const MOCK_IS_ADMIN = true; 
+
 export function Header() {
   // Mock authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // Add admin state
   const pathname = usePathname();
 
   // Effect to simulate auth check on mount (e.g., from localStorage or a cookie)
   useEffect(() => {
     // In a real app, check actual auth status
-    // For now, let's toggle based on a dummy item or randomly
     const mockAuth = localStorage.getItem('isAuthenticated') === 'true';
     setIsAuthenticated(mockAuth);
-  }, []);
+    if (mockAuth) {
+      // In a real app, you would fetch user roles here
+      // For now, we'll use a mock value.
+      setIsAdmin(MOCK_IS_ADMIN); 
+    } else {
+      setIsAdmin(false);
+    }
+  }, [pathname]); // Re-check on pathname change if login/logout happens
 
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
     setIsAuthenticated(false);
+    setIsAdmin(false); // Reset admin status on logout
     // router.push('/auth/login'); // Or wherever you want to redirect after logout
   };
   
@@ -36,6 +48,7 @@ export function Header() {
        // This is a simplified mock. Real auth flow is more complex.
        // localStorage.setItem('isAuthenticated', 'true');
        // setIsAuthenticated(true);
+       // setIsAdmin(MOCK_IS_ADMIN); // Simulate admin login
     }
   };
 
@@ -49,9 +62,10 @@ export function Header() {
         </Link>
         <nav className="flex items-center gap-4">
           {NAV_LINKS.filter(link => 
-            (!link.authRequired && !link.publicOnly) ||
-            (link.authRequired && isAuthenticated) ||
-            (link.publicOnly && !isAuthenticated)
+            (!link.authRequired && !link.publicOnly && !link.adminRequired) || // Always show public, non-auth, non-admin links
+            (link.authRequired && isAuthenticated && !link.adminRequired) || // Show auth-required links if logged in (and not admin-only)
+            (link.publicOnly && !isAuthenticated) || // Show public-only links if not logged in
+            (link.adminRequired && isAuthenticated && isAdmin) // Show admin-required links if logged in and is admin
           ).map((link) => (
             <Link
               key={link.href}
