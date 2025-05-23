@@ -3,13 +3,20 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCourseById } from '@/lib/data';
+import { getCourseById } from '@/lib/data'; // Still used for initial structure, could be replaced by Firestore fetch
 import { ModuleListItem } from '@/components/courses/ModuleListItem';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft, Info, ListChecks, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import type { Course } from '@/lib/types'; // Keep this for course structure type
+
+// Firestore imports - if fetching course details directly from Firestore
+// import { doc, getDoc } from 'firebase/firestore';
+// import { db } from '@/lib/firebase';
 
 type CourseDetailPageProps = {
   params: { courseId: string };
@@ -17,23 +24,39 @@ type CourseDetailPageProps = {
 
 export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const [course, setCourse] = useState<Awaited<ReturnType<typeof getCourseById>> | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [course, setCourse] = useState<Course | null | undefined>(undefined); // undefined for initial loading state
   const [isLoadingPage, setIsLoadingPage] = useState(true);
 
   useEffect(() => {
-    const authenticated = localStorage.getItem('isAuthenticated') === 'true';
-    if (!authenticated) {
-      router.push('/auth/login');
-    } else {
-      setIsAuthorized(true);
-      const fetchedCourse = getCourseById(params.courseId);
-      setCourse(fetchedCourse);
-      setIsLoadingPage(false);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+        // Fetch course data (mock or Firestore)
+        // For now, using existing getCourseById from mock data
+        const fetchedCourse = getCourseById(params.courseId);
+        setCourse(fetchedCourse);
+        setIsLoadingPage(false);
+        // TODO: Replace with Firestore fetch if courses are only in DB
+        // async function fetchCourseFromDb() {
+        //   const courseRef = doc(db, "courses", params.courseId);
+        //   const courseSnap = await getDoc(courseRef);
+        //   if (courseSnap.exists()) {
+        //     setCourse({ id: courseSnap.id, ...courseSnap.data() } as Course);
+        //   } else {
+        //     setCourse(null); // Course not found
+        //   }
+        //   setIsLoadingPage(false);
+        // }
+        // fetchCourseFromDb();
+      } else {
+        router.push('/auth/login?redirect=/courses/' + params.courseId);
+      }
+    });
+    return () => unsubscribe();
   }, [router, params.courseId]);
 
-  if (isLoadingPage || isAuthorized === null) {
+  if (isLoadingPage || course === undefined) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -42,8 +65,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     );
   }
 
-  if (!isAuthorized) {
-    // This path should ideally not be reached due to redirect, but as a fallback
+  if (!currentUser) {
+    // This case should be handled by the redirect, but good for safety
     return null; 
   }
 
@@ -112,10 +135,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   );
 }
 
-// generateStaticParams can still be used with client components
-// It helps Next.js know which paths to pre-render at build time.
-// The client-side auth check will still run when the page is accessed.
 export async function generateStaticParams() {
+  // This might need adjustment if courses are purely dynamic from Firestore
+  // For now, keeping it based on placeholder for build-time generation if some courses are known
   const { placeholderCourses } = await import('@/lib/data');
   return placeholderCourses.map(course => ({
     courseId: course.id,

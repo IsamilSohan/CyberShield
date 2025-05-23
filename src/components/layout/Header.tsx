@@ -1,57 +1,52 @@
 
-
-"use client"; // For handling auth state, though mocked for now
+"use client";
 
 import Link from 'next/link';
-import { ShieldCheck, UserCircle, LogOut, LogIn } from 'lucide-react';
+import { ShieldCheck, LogOut, LogIn, UserCog } from 'lucide-react'; // UserCog for Admin
 import { Button } from '@/components/ui/button';
 import { APP_NAME, NAV_LINKS } from '@/lib/constants';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { auth } from '@/lib/firebase'; // Import Firebase auth
+import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth'; // Import onAuthStateChanged and signOut
 
 // Mock admin state - in a real app, this would come from user roles/permissions
+// For example, you might fetch user data from Firestore and check an 'isAdmin' field.
 const MOCK_IS_ADMIN = true; 
 
 export function Header() {
-  // Mock authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false); // Add admin state
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
-  // Effect to simulate auth check on mount (e.g., from localStorage or a cookie)
   useEffect(() => {
-    // In a real app, check actual auth status
-    const mockAuth = localStorage.getItem('isAuthenticated') === 'true';
-    setIsAuthenticated(mockAuth);
-    if (mockAuth) {
-      // In a real app, you would fetch user roles here
-      // For now, we'll use a mock value.
-      setIsAdmin(MOCK_IS_ADMIN); 
-    } else {
-      setIsAdmin(false);
-    }
-  }, [pathname]); // Re-check on pathname change if login/logout happens
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // In a real app, you would fetch user roles here from Firestore
+        // For now, we'll use a mock value if a user is logged in.
+        // Example: fetch user doc from Firestore users/{user.uid} and check an isAdmin field
+        setIsAdmin(MOCK_IS_ADMIN); // This should be replaced with actual role checking
+      } else {
+        setIsAdmin(false);
+      }
+    });
+    return () => unsubscribe(); // Cleanup subscription on unmount
+  }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    setIsAuthenticated(false);
-    setIsAdmin(false); // Reset admin status on logout
-    // router.push('/auth/login'); // Or wherever you want to redirect after logout
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/auth/login'); // Redirect to login after logout
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Handle logout error if needed
+    }
   };
   
-  const handleLoginLink = () => {
-    // This is a mock function. In a real app, login would set this.
-    // For testing purposes, clicking Login then Register can simulate login.
-    if (pathname === '/auth/register' && !isAuthenticated) {
-       // Simulate login after registration for demo purposes
-       // This is a simplified mock. Real auth flow is more complex.
-       // localStorage.setItem('isAuthenticated', 'true');
-       // setIsAuthenticated(true);
-       // setIsAdmin(MOCK_IS_ADMIN); // Simulate admin login
-    }
-  };
-
+  const isAuthenticated = !!currentUser;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -62,21 +57,27 @@ export function Header() {
         </Link>
         <nav className="flex items-center gap-4">
           {NAV_LINKS.filter(link => 
-            (!link.authRequired && !link.publicOnly && !link.adminRequired) || // Always show public, non-auth, non-admin links
-            (link.authRequired && isAuthenticated && !link.adminRequired) || // Show auth-required links if logged in (and not admin-only)
-            (link.publicOnly && !isAuthenticated) || // Show public-only links if not logged in
-            (link.adminRequired && isAuthenticated && isAdmin) // Show admin-required links if logged in and is admin
+            (!link.authRequired && !link.publicOnly && !link.adminRequired) ||
+            (link.authRequired && isAuthenticated && !link.adminRequired) ||
+            (link.publicOnly && !isAuthenticated) ||
+            (link.adminRequired && isAuthenticated && isAdmin) 
           ).map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              onClick={link.href === '/auth/login' ? handleLoginLink : undefined}
               className={cn(
                 "text-sm font-medium transition-colors hover:text-primary",
                 pathname === link.href ? "text-primary" : "text-foreground/70"
               )}
             >
-              {link.label}
+              {/* Special case for Admin link to use UserCog icon */}
+              {link.label === "Admin" && link.adminRequired && isAuthenticated && isAdmin ? (
+                <>
+                  <UserCog className="mr-1 h-4 w-4 inline-block" /> {link.label}
+                </>
+              ) : (
+                link.label
+              )}
             </Link>
           ))}
           {isAuthenticated ? (

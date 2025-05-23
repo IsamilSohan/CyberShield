@@ -7,14 +7,13 @@ export type NavLink = {
   authRequired?: boolean; // True if link should only be shown to authenticated users
   publicOnly?: boolean; // True if link should only be shown to non-authenticated users
   adminRequired?: boolean; // True if link should only be shown to admin users
+  icon?: React.ComponentType<{ className?: string }>; // Optional icon component
 };
 
 export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Courses" },
-  // { href: "/study-guide", label: "Study Guide" }, // Removed Study Guide
   { href: "/profile", label: "Profile", authRequired: true },
-  { href: "/admin", label: "Admin", authRequired: true, adminRequired: true },
+  { href: "/admin", label: "Admin", authRequired: true, adminRequired: true }, // Admin link now checks isAdmin
   { href: "/auth/login", label: "Login", publicOnly: true },
   { href: "/auth/register", label: "Register", publicOnly: true },
 ];
-

@@ -8,7 +8,8 @@ import { AssessmentForm } from '@/components/assessment/AssessmentForm';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { Assessment, Module, Course } from '@/lib/types';
-
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
 type AssessmentPageProps = {
   params: { courseId: string; moduleId: string };
@@ -16,29 +17,32 @@ type AssessmentPageProps = {
 
 export default function AssessmentPage({ params }: AssessmentPageProps) {
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [assessment, setAssessment] = useState<Assessment | undefined>(undefined);
   const [module, setModule] = useState<Module | undefined>(undefined);
   const [course, setCourse] = useState<Course | undefined>(undefined);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   
   useEffect(() => {
-    const authenticated = localStorage.getItem('isAuthenticated') === 'true';
-    if (!authenticated) {
-      router.push('/auth/login');
-    } else {
-      setIsAuthorized(true);
-      const fetchedAssessment = getAssessmentByModuleId(params.moduleId);
-      const fetchedModule = getModuleById(params.courseId, params.moduleId);
-      const fetchedCourse = getCourseById(params.courseId);
-      setAssessment(fetchedAssessment);
-      setModule(fetchedModule);
-      setCourse(fetchedCourse);
-      setIsLoadingPage(false);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+        const fetchedAssessment = getAssessmentByModuleId(params.moduleId);
+        const fetchedModule = getModuleById(params.courseId, params.moduleId);
+        const fetchedCourse = getCourseById(params.courseId);
+        setAssessment(fetchedAssessment);
+        setModule(fetchedModule);
+        setCourse(fetchedCourse);
+        // TODO: Fetch from Firestore if not using mock data
+        setIsLoadingPage(false);
+      } else {
+        router.push(`/auth/login?redirect=/courses/${params.courseId}/${params.moduleId}/assessment`);
+      }
+    });
+    return () => unsubscribe();
   }, [router, params.courseId, params.moduleId]);
 
-  if (isLoadingPage || isAuthorized === null) {
+  if (isLoadingPage || assessment === undefined || module === undefined || course === undefined) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -47,7 +51,7 @@ export default function AssessmentPage({ params }: AssessmentPageProps) {
     );
   }
 
-  if (!isAuthorized) return null;
+  if (!currentUser) return null; // Should be redirected
 
   if (!assessment || !module || !course) {
     return <p className="text-center text-destructive-foreground bg-destructive p-4 rounded-md">Assessment, module, or course not found.</p>;

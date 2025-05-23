@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getModuleById, getCourseById } from '@/lib/data';
+import { getModuleById, getCourseById } from '@/lib/data'; // Still used for initial structure
 import { VideoPlayer } from '@/components/courses/VideoPlayer';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -11,6 +11,8 @@ import { ArrowLeft, FileText, Award, CheckSquare, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Module, Course } from '@/lib/types';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
 type ModuleDetailPageProps = {
   params: { courseId: string; moduleId: string };
@@ -18,26 +20,29 @@ type ModuleDetailPageProps = {
 
 export default function ModuleDetailPage({ params }: ModuleDetailPageProps) {
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [module, setModule] = useState<Module | undefined>(undefined);
   const [course, setCourse] = useState<Course | undefined>(undefined);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
 
   useEffect(() => {
-    const authenticated = localStorage.getItem('isAuthenticated') === 'true';
-    if (!authenticated) {
-      router.push('/auth/login');
-    } else {
-      setIsAuthorized(true);
-      const fetchedModule = getModuleById(params.courseId, params.moduleId);
-      const fetchedCourse = getCourseById(params.courseId);
-      setModule(fetchedModule);
-      setCourse(fetchedCourse);
-      setIsLoadingPage(false);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+        const fetchedModule = getModuleById(params.courseId, params.moduleId);
+        const fetchedCourse = getCourseById(params.courseId);
+        setModule(fetchedModule);
+        setCourse(fetchedCourse);
+        // TODO: Fetch module/course from Firestore if not using mock data
+        setIsLoadingPage(false);
+      } else {
+        router.push(`/auth/login?redirect=/courses/${params.courseId}/${params.moduleId}`);
+      }
+    });
+    return () => unsubscribe();
   }, [router, params.courseId, params.moduleId]);
 
-  if (isLoadingPage || isAuthorized === null) {
+  if (isLoadingPage || module === undefined || course === undefined) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -46,8 +51,7 @@ export default function ModuleDetailPage({ params }: ModuleDetailPageProps) {
     );
   }
   
-  if (!isAuthorized) return null;
-
+  if (!currentUser) return null; // Should be redirected by effect
 
   if (!module || !course) {
     return <p className="text-center text-destructive-foreground bg-destructive p-4 rounded-md">Module or course not found.</p>;
@@ -104,8 +108,6 @@ export default function ModuleDetailPage({ params }: ModuleDetailPageProps) {
                   Take Assessment
                 </Link>
               </Button>
-              {/* Removed Study Guide button */}
-               {/* Placeholder for certificate link, actual logic would be more complex */}
               <Button asChild className="w-full" variant="secondary">
                 <Link href={`/courses/${params.courseId}/certificate`}>
                   <Award className="mr-2 h-4 w-4" />
@@ -119,7 +121,6 @@ export default function ModuleDetailPage({ params }: ModuleDetailPageProps) {
     </div>
   );
 }
-
 
 export async function generateStaticParams() {
   const { placeholderCourses } = await import('@/lib/data');

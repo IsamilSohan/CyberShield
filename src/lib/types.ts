@@ -2,11 +2,12 @@
 import { z } from 'zod';
 
 export interface User {
-  id: string;
+  id: string; // This will store Firebase Auth UID
   name: string;
   email: string;
   enrolledCourses: string[]; // Array of course IDs
   certificates: Certificate[];
+  // isAdmin?: boolean; // Optional: for role-based access control later
 }
 
 export interface Course {
@@ -55,8 +56,6 @@ export const NewCourseSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters."),
   description: z.string().min(10, "Description must be at least 10 characters."),
   longDescription: z.string().optional(),
-  // imageUrl can be a valid URL or an empty string. It's optional in the sense that if not provided, it's fine.
-  // The form will provide an empty string by default if not filled.
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().optional(),
   prerequisites: z.string().optional(), // Will be comma-separated string
