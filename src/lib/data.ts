@@ -1,3 +1,4 @@
+
 import type { Course, User, Certificate, Module, Assessment, AssessmentQuestion } from './types';
 
 export const placeholderUser: User = {
@@ -16,6 +17,34 @@ export const placeholderUser: User = {
     }
   ],
 };
+
+export const placeholderUsers: User[] = [
+  placeholderUser, // Alex Shield
+  {
+    id: 'user456',
+    name: 'Jamie Coder',
+    email: 'jamie.coder@example.com',
+    enrolledCourses: ['net-defense-201', 'ethical-hacking-301'],
+    certificates: [
+      {
+        id: 'cert-002',
+        courseId: 'net-defense-201',
+        courseName: 'Network Defense Strategies',
+        userName: 'Jamie Coder',
+        issueDate: new Date('2023-10-20').toISOString(),
+        certificateUrl: 'https://placehold.co/800x600.png' // Use placeholder URL
+      }
+    ],
+  },
+  {
+    id: 'user789',
+    name: 'Casey Learner',
+    email: 'casey.learner@example.com',
+    enrolledCourses: ['cybersec-101'],
+    certificates: [],
+  }
+];
+
 
 const sampleModules: Module[] = [
   { id: 'module-1', title: 'Understanding Cyber Threats', videoUrl: 'https://www.example.com/video1.mp4', transcript: 'This is a transcript for understanding cyber threats... In this module, we will cover various types of cyber attacks such as phishing, malware, and ransomware. We will also discuss the motivations behind these attacks and common vulnerabilities exploited by attackers.', duration: '22 min' },
@@ -83,9 +112,9 @@ export const getAssessmentByModuleId = (moduleId: string): Assessment | undefine
 };
 
 export const getCertificateForCourse = (courseId: string, userId: string): Certificate | undefined => {
-  const user = placeholderUser; // Assuming single user for now
+  const user = placeholderUsers.find(u => u.id === userId); // Use placeholderUsers
   const course = getCourseById(courseId);
-  if (user.id === userId && course && user.enrolledCourses.includes(courseId)) {
+  if (user && course && user.enrolledCourses.includes(courseId)) {
     // Check if user actually completed the course (mocked here)
     const existingCert = user.certificates.find(c => c.courseId === courseId);
     if (existingCert) return existingCert;
