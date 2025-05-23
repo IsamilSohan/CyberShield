@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,21 +15,20 @@ import {
 } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Assessment, AssessmentQuestion } from "@/lib/types";
+import type { Assessment } from "@/lib/types"; // Assessment type now links to courseId
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation"; // Corrected import
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface AssessmentFormProps {
   assessment: Assessment;
-  courseId: string;
+  courseId: string; 
 }
 
 export function AssessmentForm({ assessment, courseId }: AssessmentFormProps) {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Dynamically create a Zod schema based on the questions
   const formSchemaObject = assessment.questions.reduce((acc, question) => {
     acc[`question_${question.id}`] = z.string().min(1, { message: "Please select an answer." });
     return acc;
@@ -43,13 +43,10 @@ export function AssessmentForm({ assessment, courseId }: AssessmentFormProps) {
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     console.log("Assessment Answers:", values);
-    // In a real app, submit answers and check score
-    // For demo, assume pass
     toast({
       title: "Assessment Submitted!",
       description: "You have successfully completed the assessment.",
     });
-    // Redirect to certificate page or next module
     router.push(`/courses/${courseId}/certificate`);
   }
 
@@ -58,7 +55,8 @@ export function AssessmentForm({ assessment, courseId }: AssessmentFormProps) {
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-center">Assessment</CardTitle>
         <CardDescription className="text-center">
-          Test your knowledge on module: {assessment.moduleId}
+          {/* Assessment is now tied to courseId, not moduleId */}
+          Test your knowledge for course: {assessment.courseId} 
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -98,8 +96,9 @@ export function AssessmentForm({ assessment, courseId }: AssessmentFormProps) {
               />
             ))}
             <div className="flex justify-end gap-4">
+              {/* Link back to the main course page */}
               <Button type="button" variant="outline" asChild>
-                 <Link href={`/courses/${courseId}/${assessment.moduleId}`}>Back to Module</Link>
+                 <Link href={`/courses/${courseId}`}>Back to Course</Link>
               </Button>
               <Button type="submit">Submit Assessment</Button>
             </div>

@@ -21,8 +21,9 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
       longDescription: data.longDescription || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       imageHint: data.imageHint || 'education technology',
-      modules: data.modules || [], 
+      videoUrl: data.videoUrl || '', // Added videoUrl
       prerequisites: data.prerequisites || [],
+      quizId: data.quizId || '', // Added quizId
     } as Course;
   });
   return coursesList;
@@ -73,7 +74,7 @@ export default async function AdminCoursesPage() {
                   <TableRow>
                     <TableHead className="w-[150px]">ID</TableHead>
                     <TableHead>Title</TableHead>
-                    <TableHead className="text-center">Modules</TableHead>
+                    <TableHead className="text-center">Has Video?</TableHead> {/* Changed from Modules */}
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -82,7 +83,7 @@ export default async function AdminCoursesPage() {
                     <TableRow key={course.id}>
                       <TableCell className="font-medium truncate max-w-xs">{course.id}</TableCell>
                       <TableCell>{course.title}</TableCell>
-                      <TableCell className="text-center">{course.modules.length}</TableCell>
+                      <TableCell className="text-center">{course.videoUrl ? 'Yes' : 'No'}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="outline" size="sm" aria-label={`Edit course ${course.title}`}>
                            <Edit className="h-4 w-4" />

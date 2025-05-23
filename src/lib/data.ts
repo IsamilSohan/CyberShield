@@ -1,5 +1,5 @@
 
-import type { Course, User, Certificate, Module, Assessment, AssessmentQuestion } from './types';
+import type { Course, User, Certificate, Assessment, AssessmentQuestion } from './types'; // Removed Module
 
 export const placeholderUser: User = {
   id: 'user123',
@@ -19,7 +19,7 @@ export const placeholderUser: User = {
 };
 
 export const placeholderUsers: User[] = [
-  placeholderUser, // Alex Shield
+  placeholderUser,
   {
     id: 'user456',
     name: 'Jamie Coder',
@@ -32,7 +32,7 @@ export const placeholderUsers: User[] = [
         courseName: 'Network Defense Strategies',
         userName: 'Jamie Coder',
         issueDate: new Date('2023-10-20').toISOString(),
-        certificateUrl: 'https://placehold.co/800x600.png' // Use placeholder URL
+        certificateUrl: 'https://placehold.co/800x600.png'
       }
     ],
   },
@@ -45,12 +45,7 @@ export const placeholderUsers: User[] = [
   }
 ];
 
-
-const sampleModules: Module[] = [
-  { id: 'module-1', title: 'Understanding Cyber Threats', videoUrl: 'https://www.example.com/video1.mp4', transcript: 'This is a transcript for understanding cyber threats... In this module, we will cover various types of cyber attacks such as phishing, malware, and ransomware. We will also discuss the motivations behind these attacks and common vulnerabilities exploited by attackers.', duration: '22 min' },
-  { id: 'module-2', title: 'Network Security Basics', videoUrl: 'https://www.example.com/video2.mp4', transcript: 'This is a transcript for network security basics... This module explores fundamental concepts of network security, including firewalls, intrusion detection systems (IDS), and virtual private networks (VPNs). We will learn how to configure basic network defenses and monitor for suspicious activity.', duration: '28 min' },
-  { id: 'module-3', title: 'Cryptography Fundamentals', videoUrl: 'https://www.example.com/video3.mp4', transcript: 'This is a transcript for cryptography fundamentals... Learn about encryption, decryption, hashing, and digital signatures. This module explains symmetric and asymmetric cryptography, and their applications in securing data at rest and in transit.', duration: '35 min' },
-];
+// sampleModules removed as modules are no longer part of the Course type directly
 
 export const placeholderCourses: Course[] = [
   {
@@ -60,8 +55,9 @@ export const placeholderCourses: Course[] = [
     longDescription: 'This comprehensive course covers the foundational principles of cybersecurity. You will learn about common threats, vulnerabilities, and risk management strategies. Perfect for beginners looking to start a career in cybersecurity or individuals wanting to enhance their digital safety.',
     imageUrl: 'https://placehold.co/600x400.png',
     imageHint: 'cyber security',
-    modules: sampleModules.slice(0,2),
+    videoUrl: 'https://www.example.com/video_fundamentals.mp4',
     prerequisites: ['Basic computer literacy'],
+    quizId: 'quiz-cybersec-101',
   },
   {
     id: 'net-defense-201',
@@ -70,8 +66,9 @@ export const placeholderCourses: Course[] = [
     longDescription: 'Dive deep into network defense mechanisms. This course explores advanced firewall configurations, intrusion prevention systems (IPS), network segmentation, and security information and event management (SIEM) tools. Hands-on labs will provide practical experience in building resilient network architectures.',
     imageUrl: 'https://placehold.co/600x400.png',
     imageHint: 'network server',
-    modules: sampleModules,
+    videoUrl: 'https://www.example.com/video_network_defense.mp4',
     prerequisites: ['Cybersecurity Fundamentals', 'Basic Networking Knowledge'],
+    quizId: 'quiz-net-defense-201',
   },
   {
     id: 'ethical-hacking-301',
@@ -80,53 +77,64 @@ export const placeholderCourses: Course[] = [
     longDescription: 'Learn the methodologies and tools used by ethical hackers to identify and exploit vulnerabilities in systems and networks. This course covers reconnaissance, scanning, exploitation, post-exploitation, and reporting. Emphasis is placed on ethical considerations and legal frameworks.',
     imageUrl: 'https://placehold.co/600x400.png',
     imageHint: 'code programming',
-    modules: sampleModules.map(m => ({...m, id: `eh-${m.id}`})),
+    videoUrl: 'https://www.example.com/video_ethical_hacking.mp4',
     prerequisites: ['Network Defense Strategies', 'Understanding of Operating Systems'],
+    quizId: 'quiz-ethical-hacking-301',
   },
 ];
 
 export const getCourseById = (id: string): Course | undefined => {
+  // This function will still work with the updated placeholderCourses.
+  // However, actual course data will now primarily come from Firestore.
   return placeholderCourses.find(course => course.id === id);
 };
 
-export const getModuleById = (courseId: string, moduleId: string): Module | undefined => {
-  const course = getCourseById(courseId);
-  return course?.modules.find(module => module.id === moduleId);
-};
+// getModuleById is no longer needed as modules are removed from course structure
 
 const sampleAssessmentQuestions: AssessmentQuestion[] = [
   { id: 'q1', questionText: 'What is phishing?', options: [{id: 'opt1', text:'A type of malware'}, {id: 'opt2', text:'A social engineering attack'}, {id: 'opt3', text:'A network intrusion method'}], correctOptionId: 'opt2' },
   { id: 'q2', questionText: 'Which of these is a strong password?', options: [{id: 'opt1', text:'password123'}, {id: 'opt2', text:'MyP@$$wOrd!23'}, {id: 'opt3', text:'admin'}], correctOptionId: 'opt2' },
 ];
 
-export const getAssessmentByModuleId = (moduleId: string): Assessment | undefined => {
-  // In a real app, assessments would be unique per module
-  if (sampleModules.find(m => m.id === moduleId)) {
+// Updated to link assessment to courseId directly
+export const getAssessmentByCourseId = (courseId: string): Assessment | undefined => {
+  // In a real app, assessments would be unique per course and fetched from DB
+  // For demo, we return a generic assessment if the courseId exists in placeholders
+  const course = placeholderCourses.find(c => c.id === courseId);
+  if (course) {
     return {
-      id: `assess-${moduleId}`,
-      moduleId: moduleId,
-      questions: sampleAssessmentQuestions
+      id: `assess-${courseId}`,
+      courseId: courseId,
+      questions: sampleAssessmentQuestions // Using generic questions for now
     };
   }
   return undefined;
 };
 
+
 export const getCertificateForCourse = (courseId: string, userId: string): Certificate | undefined => {
-  const user = placeholderUsers.find(u => u.id === userId); // Use placeholderUsers
-  const course = getCourseById(courseId);
+  const user = placeholderUsers.find(u => u.id === userId);
+  const course = getCourseById(courseId); // This might still use mock data for course title
+  
   if (user && course && user.enrolledCourses.includes(courseId)) {
-    // Check if user actually completed the course (mocked here)
     const existingCert = user.certificates.find(c => c.courseId === courseId);
     if (existingCert) return existingCert;
 
+    // Simulating earning a certificate if enrolled
     return {
       id: `cert-${courseId}-${userId}`,
       courseId: courseId,
-      courseName: course.title,
+      courseName: course.title, // Course title from mock data
       userName: user.name,
       issueDate: new Date().toISOString(),
-      certificateUrl: `https://placehold.co/800x600.png` // Placeholder cert image
+      certificateUrl: `https://placehold.co/800x600.png`
     };
   }
   return undefined;
 };
+
+// It's advisable to remove getAssessmentByModuleId if it's no longer used elsewhere.
+// For now, I'm leaving it commented out in case it was a typo and you meant to update getAssessmentByCourseId.
+// export const getAssessmentByModuleId = (moduleId: string): Assessment | undefined => {
+//   // ... (old implementation)
+// };

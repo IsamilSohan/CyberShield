@@ -3,12 +3,12 @@ import { CourseCard } from '@/components/courses/CourseCard';
 import { APP_NAME } from '@/lib/constants';
 import type { Course } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore'; // Renamed query to avoid conflict if any
+import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore';
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
   try {
     const coursesCol = collection(db, 'courses');
-    const q = firestoreQuery(coursesCol); // Use the renamed import
+    const q = firestoreQuery(coursesCol);
     const courseSnapshot = await getDocs(q);
     const coursesList = courseSnapshot.docs.map(doc => {
       const data = doc.data();
@@ -19,8 +19,9 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
         longDescription: data.longDescription || '',
         imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
         imageHint: data.imageHint || 'education technology',
-        modules: data.modules || [],
+        videoUrl: data.videoUrl || '', // Added videoUrl
         prerequisites: data.prerequisites || [],
+        quizId: data.quizId || '', // Added quizId
       } as Course;
     });
     return coursesList;

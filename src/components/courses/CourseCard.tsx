@@ -1,19 +1,17 @@
+
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Course } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Clock } from 'lucide-react';
+import { PlayCircle } from 'lucide-react'; // Changed from BookOpen
 
 interface CourseCardProps {
   course: Course;
 }
 
 export function CourseCard({ course }: CourseCardProps) {
-  const totalDuration = course.modules.reduce((acc, module) => {
-    const durationMinutes = parseInt(module.duration, 10);
-    return acc + (isNaN(durationMinutes) ? 0 : durationMinutes);
-  }, 0);
+  // Removed module-specific calculations
 
   return (
     <Card className="flex flex-col h-full overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -35,14 +33,10 @@ export function CourseCard({ course }: CourseCardProps) {
         </Link>
         <CardDescription className="text-sm text-muted-foreground mb-4">{course.description}</CardDescription>
         <div className="flex items-center text-xs text-muted-foreground space-x-4">
-          <div className="flex items-center">
-            <BookOpen className="w-4 h-4 mr-1" />
-            <span>{course.modules.length} Modules</span>
-          </div>
-          {totalDuration > 0 && (
+          {course.videoUrl && (
             <div className="flex items-center">
-              <Clock className="w-4 h-4 mr-1" />
-              <span>Approx. {totalDuration} min</span>
+              <PlayCircle className="w-4 h-4 mr-1" />
+              <span>Course Video</span>
             </div>
           )}
         </div>

@@ -2,60 +2,62 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation'; // Added useParams
-import { getCourseById } from '@/lib/data'; 
-import { ModuleListItem } from '@/components/courses/ModuleListItem';
+import { useRouter, useParams } from 'next/navigation';
+import { VideoPlayer } from '@/components/courses/VideoPlayer';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, ListChecks, Loader2 } from 'lucide-react';
+import { ArrowLeft, Info, ListChecks, Loader2, PlayCircle, CheckSquare, Award } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // Import db
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import type { Course } from '@/lib/types'; 
+import type { Course } from '@/lib/types';
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Firestore imports - if fetching course details directly from Firestore
-// import { doc, getDoc } from 'firebase/firestore';
-// import { db } from '@/lib/firebase';
-
-// CourseDetailPageProps type removed
 
 export default function CourseDetailPage() {
   const router = useRouter();
-  const params = useParams<{ courseId: string }>(); // Use useParams hook
-  const courseId = params.courseId; // Extract courseId
+  const params = useParams<{ courseId: string }>();
+  const courseId = params.courseId;
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [course, setCourse] = useState<Course | null | undefined>(undefined); 
+  const [course, setCourse] = useState<Course | null | undefined>(undefined);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        // Fetch course data (mock or Firestore)
-        // For now, using existing getCourseById from mock data
-        const fetchedCourse = getCourseById(courseId); // Use extracted courseId
-        setCourse(fetchedCourse);
-        setIsLoadingPage(false);
-        // TODO: Replace with Firestore fetch if courses are only in DB
-        // async function fetchCourseFromDb() {
-        //   const courseRef = doc(db, "courses", courseId);
-        //   const courseSnap = await getDoc(courseRef);
-        //   if (courseSnap.exists()) {
-        //     setCourse({ id: courseSnap.id, ...courseSnap.data() } as Course);
-        //   } else {
-        //     setCourse(null); // Course not found
-        //   }
-        //   setIsLoadingPage(false);
-        // }
-        // fetchCourseFromDb();
+        async function fetchCourseFromDb() {
+          if (!courseId) {
+            setIsLoadingPage(false);
+            setCourse(null); // No courseId, so course not found
+            return;
+          }
+          try {
+            const courseRef = doc(db, "courses", courseId);
+            const courseSnap = await getDoc(courseRef);
+            if (courseSnap.exists()) {
+              setCourse({ id: courseSnap.id, ...courseSnap.data() } as Course);
+            } else {
+              setCourse(null); // Course not found
+            }
+          } catch (error) {
+            console.error("Error fetching course:", error);
+            setCourse(null);
+          } finally {
+            setIsLoadingPage(false);
+          }
+        }
+        fetchCourseFromDb();
       } else {
-        router.push('/auth/login?redirect=/courses/' + courseId); // Use extracted courseId
+        router.push('/auth/login?redirect=/courses/' + courseId);
       }
     });
     return () => unsubscribe();
-  }, [router, courseId]); // Use extracted courseId in dependency array
+  }, [router, courseId]);
 
   if (isLoadingPage || course === undefined) {
     return (
@@ -67,8 +69,7 @@ export default function CourseDetailPage() {
   }
 
   if (!currentUser) {
-    // This case should be handled by the redirect, but good for safety
-    return null; 
+    return null;
   }
 
   if (!course) {
@@ -82,56 +83,90 @@ export default function CourseDetailPage() {
         Back to Courses
       </Link>
 
-      <section className="bg-card p-6 sm:p-8 rounded-lg shadow-xl">
-        <div className="grid md:grid-cols-3 gap-8 items-start">
-          <div className="md:col-span-1">
-            <Image
-              src={course.imageUrl}
-              alt={course.title}
-              width={600}
-              height={400}
-              className="rounded-lg object-cover w-full shadow-md"
-              data-ai-hint={course.imageHint || "education learning"}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <h1 className="text-3xl sm:text-4xl font-bold mb-3">{course.title}</h1>
-            <p className="text-muted-foreground text-lg mb-4">{course.description}</p>
-            {course.longDescription && <p className="text-foreground/80 mb-6">{course.longDescription}</p>}
-            
-            {course.prerequisites && course.prerequisites.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-md font-semibold mb-2 flex items-center"><Info className="w-5 h-5 mr-2 text-primary"/>Prerequisites:</h3>
-                <div className="flex flex-wrap gap-2">
-                  {course.prerequisites.map((prereq, index) => (
-                    <Badge key={index} variant="secondary">{prereq}</Badge>
-                  ))}
+      <header className="mb-8">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-2">{course.title}</h1>
+        {course.description && <p className="text-lg text-muted-foreground">{course.description}</p>}
+      </header>
+      
+      <div className="grid lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+            <section className="bg-card p-6 sm:p-8 rounded-lg shadow-xl mb-8">
+                <div className="grid md:grid-cols-3 gap-6 items-start">
+                    <div className="md:col-span-1">
+                        <Image
+                        src={course.imageUrl}
+                        alt={course.title}
+                        width={600}
+                        height={400}
+                        className="rounded-lg object-cover w-full shadow-md"
+                        data-ai-hint={course.imageHint || "education learning"}
+                        />
+                    </div>
+                    <div className="md:col-span-2">
+                        {/* Title and short description are already in the header */}
+                        {course.longDescription && <p className="text-foreground/80 mb-6">{course.longDescription}</p>}
+                        
+                        {course.prerequisites && course.prerequisites.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="text-md font-semibold mb-2 flex items-center"><Info className="w-5 h-5 mr-2 text-primary"/>Prerequisites:</h3>
+                            <div className="flex flex-wrap gap-2">
+                            {course.prerequisites.map((prereq, index) => (
+                                <Badge key={index} variant="secondary">{prereq}</Badge>
+                            ))}
+                            </div>
+                        </div>
+                        )}
+                        {/* "Start Learning" button removed as video is primary content */}
+                    </div>
                 </div>
-              </div>
+            </section>
+
+            {course.videoUrl ? (
+                <VideoPlayer videoUrl={course.videoUrl} title={course.title} />
+            ) : (
+                <Card>
+                    <CardContent className="p-6 text-center text-muted-foreground">
+                        <PlayCircle className="w-12 h-12 mx-auto mb-2 text-primary/50" />
+                        No video available for this course yet.
+                    </CardContent>
+                </Card>
             )}
-
-            <Button size="lg" className="w-full sm:w-auto">
-              Start Learning
-            </Button>
-          </div>
+            {/* Placeholder for transcript if we add it back at course level */}
+            {/* <Card>
+                <CardHeader><CardTitle>Transcript</CardTitle></CardHeader>
+                <CardContent><ScrollArea className="h-48">Course transcript...</ScrollArea></CardContent>
+            </Card> */}
         </div>
-      </section>
 
-      <section>
-        <h2 className="text-2xl sm:text-3xl font-semibold mb-6 flex items-center">
-          <ListChecks className="mr-3 h-7 w-7 text-primary" />
-          Course Modules
-        </h2>
-        {course.modules.length > 0 ? (
-          <div className="space-y-4">
-            {course.modules.map((module, index) => (
-              <ModuleListItem key={module.id} module={module} courseId={course.id} moduleNumber={index + 1} />
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted-foreground">No modules available for this course yet.</p>
-        )}
-      </section>
+        <aside className="lg:col-span-1 space-y-6">
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <CheckSquare className="mr-2 h-5 w-5 text-primary" />
+                Next Steps
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                After watching the video, test your knowledge or claim your certificate.
+              </p>
+              {/* We will need to create a quiz system and link it via course.quizId */}
+              <Button asChild className="w-full" variant="default" disabled={!course.quizId}>
+                 {/* This link needs to be updated if/when quiz system is built */}
+                <Link href={`/courses/${course.id}/assessment`}> 
+                  Attempt Quiz
+                </Link>
+              </Button>
+              <Button asChild className="w-full" variant="secondary">
+                <Link href={`/courses/${course.id}/certificate`}>
+                  <Award className="mr-2 h-4 w-4" />
+                  View Certificate (Mock)
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
     </div>
   );
 }

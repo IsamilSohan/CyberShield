@@ -17,17 +17,12 @@ export interface Course {
   longDescription?: string;
   imageUrl: string;
   imageHint?: string;
-  modules: Module[];
+  videoUrl?: string; // URL for the main course video
   prerequisites?: string[];
+  quizId?: string; // Placeholder for a future quiz link
 }
 
-export interface Module {
-  id: string;
-  title: string;
-  videoUrl: string;
-  transcript?: string; // Made optional
-  duration?: string; // e.g., "15 min" - Made optional
-}
+// Module interface is no longer needed for the simplified structure
 
 export interface AssessmentQuestion {
   id: string;
@@ -38,7 +33,7 @@ export interface AssessmentQuestion {
 
 export interface Assessment {
   id: string;
-  moduleId: string;
+  courseId: string; // Changed from moduleId to courseId
   questions: AssessmentQuestion[];
 }
 
@@ -58,22 +53,8 @@ export const NewCourseSchema = z.object({
   longDescription: z.string().optional(),
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().optional(),
+  videoUrl: z.string().url({ message: "Video URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   prerequisites: z.string().optional(), // Will be comma-separated string
-  initialModuleTitle: z.string().min(3, "Initial module title must be at least 3 characters if provided.").optional().or(z.literal('')),
-  initialModuleVideoUrl: z.string().url({ message: "Initial module video URL must be a valid URL if provided." }).optional().or(z.literal('')),
-}).refine(data => {
-  const titleIsProvided = !!(data.initialModuleTitle && data.initialModuleTitle.trim() !== '');
-  const urlIsProvided = !!(data.initialModuleVideoUrl && data.initialModuleVideoUrl.trim() !== '');
-  // Both must be provided together, or neither provided.
-  return titleIsProvided === urlIsProvided;
-}, {
-  message: "If providing an initial module title, you must also provide a video URL (and vice-versa), or leave both blank.",
-  // This error message will appear as a general form error if not caught specifically by path.
-  // For better UX, individual field errors are preferred, but refine affects the whole object.
-  // We'll handle displaying this generic message in the toast.
-  // Setting a path here would associate it with a specific field, which might be misleading
-  // if the issue is the combination. For now, it'll be a general form error.
-  // path: ["initialModuleTitle"], // Optionally associate with a field
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
