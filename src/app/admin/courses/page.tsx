@@ -21,9 +21,9 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
       longDescription: data.longDescription || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       imageHint: data.imageHint || 'education technology',
-      videoUrl: data.videoUrl || '', // Added videoUrl
-      prerequisites: data.prerequisites || [],
-      quizId: data.quizId || '', // Added quizId
+      videoUrl: data.videoUrl || '',
+      prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
+      quizId: data.quizId || '',
     } as Course;
   });
   return coursesList;
@@ -72,10 +72,10 @@ export default async function AdminCoursesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[150px]">ID</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="text-center">Has Video?</TableHead> {/* Changed from Modules */}
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[150px]">ID</TableHead>{/*
+                    */}<TableHead>Title</TableHead>{/*
+                    */}<TableHead className="text-center">Has Video?</TableHead>{/*
+                    */}<TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
