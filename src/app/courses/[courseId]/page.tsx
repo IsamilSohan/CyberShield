@@ -1,17 +1,51 @@
+
+"use client";
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getCourseById } from '@/lib/data';
 import { ModuleListItem } from '@/components/courses/ModuleListItem';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, ListChecks } from 'lucide-react';
+import { ArrowLeft, Info, ListChecks, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 type CourseDetailPageProps = {
   params: { courseId: string };
 };
 
-export default async function CourseDetailPage({ params }: CourseDetailPageProps) {
-  const course = getCourseById(params.courseId);
+export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [course, setCourse] = useState<Awaited<ReturnType<typeof getCourseById>> | null>(null);
+  const [isLoadingPage, setIsLoadingPage] = useState(true);
+
+  useEffect(() => {
+    const authenticated = localStorage.getItem('isAuthenticated') === 'true';
+    if (!authenticated) {
+      router.push('/auth/login');
+    } else {
+      setIsAuthorized(true);
+      const fetchedCourse = getCourseById(params.courseId);
+      setCourse(fetchedCourse);
+      setIsLoadingPage(false);
+    }
+  }, [router, params.courseId]);
+
+  if (isLoadingPage || isAuthorized === null) {
+    return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading course details...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    // This path should ideally not be reached due to redirect, but as a fallback
+    return null; 
+  }
 
   if (!course) {
     return <p className="text-center text-destructive-foreground bg-destructive p-4 rounded-md">Course not found.</p>;
@@ -53,7 +87,6 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
             )}
 
             <Button size="lg" className="w-full sm:w-auto">
-              {/* This button could be "Enroll Now" or "Start Learning" based on user status */}
               Start Learning
             </Button>
           </div>
@@ -79,6 +112,9 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
   );
 }
 
+// generateStaticParams can still be used with client components
+// It helps Next.js know which paths to pre-render at build time.
+// The client-side auth check will still run when the page is accessed.
 export async function generateStaticParams() {
   const { placeholderCourses } = await import('@/lib/data');
   return placeholderCourses.map(course => ({

@@ -1,17 +1,53 @@
+
+"use client";
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getAssessmentByModuleId, getModuleById, getCourseById } from '@/lib/data';
 import { AssessmentForm } from '@/components/assessment/AssessmentForm';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import type { Assessment, Module, Course } from '@/lib/types';
+
 
 type AssessmentPageProps = {
   params: { courseId: string; moduleId: string };
 };
 
-export default async function AssessmentPage({ params }: AssessmentPageProps) {
-  const assessment = getAssessmentByModuleId(params.moduleId);
-  const module = getModuleById(params.courseId, params.moduleId);
-  const course = getCourseById(params.courseId);
+export default function AssessmentPage({ params }: AssessmentPageProps) {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [assessment, setAssessment] = useState<Assessment | undefined>(undefined);
+  const [module, setModule] = useState<Module | undefined>(undefined);
+  const [course, setCourse] = useState<Course | undefined>(undefined);
+  const [isLoadingPage, setIsLoadingPage] = useState(true);
+  
+  useEffect(() => {
+    const authenticated = localStorage.getItem('isAuthenticated') === 'true';
+    if (!authenticated) {
+      router.push('/auth/login');
+    } else {
+      setIsAuthorized(true);
+      const fetchedAssessment = getAssessmentByModuleId(params.moduleId);
+      const fetchedModule = getModuleById(params.courseId, params.moduleId);
+      const fetchedCourse = getCourseById(params.courseId);
+      setAssessment(fetchedAssessment);
+      setModule(fetchedModule);
+      setCourse(fetchedCourse);
+      setIsLoadingPage(false);
+    }
+  }, [router, params.courseId, params.moduleId]);
 
+  if (isLoadingPage || isAuthorized === null) {
+    return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading assessment...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) return null;
 
   if (!assessment || !module || !course) {
     return <p className="text-center text-destructive-foreground bg-destructive p-4 rounded-md">Assessment, module, or course not found.</p>;
@@ -33,7 +69,6 @@ export async function generateStaticParams() {
   const params: { courseId: string; moduleId: string }[] = [];
   placeholderCourses.forEach(course => {
     course.modules.forEach(module => {
-      // Assuming all modules have an assessment for static generation
       if (getAssessmentByModuleId(module.id)) {
         params.push({ courseId: course.id, moduleId: module.id });
       }

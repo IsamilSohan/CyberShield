@@ -11,9 +11,10 @@ export type NavLink = {
 
 export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Courses" },
-  { href: "/study-guide", label: "Study Guide" },
+  // { href: "/study-guide", label: "Study Guide" }, // Removed Study Guide
   { href: "/profile", label: "Profile", authRequired: true },
-  { href: "/admin", label: "Admin", authRequired: true, adminRequired: true }, // Added admin link
+  { href: "/admin", label: "Admin", authRequired: true, adminRequired: true },
   { href: "/auth/login", label: "Login", publicOnly: true },
   { href: "/auth/register", label: "Register", publicOnly: true },
 ];
+

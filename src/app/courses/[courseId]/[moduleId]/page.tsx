@@ -1,18 +1,53 @@
+
+"use client";
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getModuleById, getCourseById } from '@/lib/data';
 import { VideoPlayer } from '@/components/courses/VideoPlayer';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, FileText, Award, CheckSquare } from 'lucide-react';
+import { ArrowLeft, FileText, Award, CheckSquare, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import type { Module, Course } from '@/lib/types';
 
 type ModuleDetailPageProps = {
   params: { courseId: string; moduleId: string };
 };
 
-export default async function ModuleDetailPage({ params }: ModuleDetailPageProps) {
-  const module = getModuleById(params.courseId, params.moduleId);
-  const course = getCourseById(params.courseId);
+export default function ModuleDetailPage({ params }: ModuleDetailPageProps) {
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [module, setModule] = useState<Module | undefined>(undefined);
+  const [course, setCourse] = useState<Course | undefined>(undefined);
+  const [isLoadingPage, setIsLoadingPage] = useState(true);
+
+  useEffect(() => {
+    const authenticated = localStorage.getItem('isAuthenticated') === 'true';
+    if (!authenticated) {
+      router.push('/auth/login');
+    } else {
+      setIsAuthorized(true);
+      const fetchedModule = getModuleById(params.courseId, params.moduleId);
+      const fetchedCourse = getCourseById(params.courseId);
+      setModule(fetchedModule);
+      setCourse(fetchedCourse);
+      setIsLoadingPage(false);
+    }
+  }, [router, params.courseId, params.moduleId]);
+
+  if (isLoadingPage || isAuthorized === null) {
+    return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading module...</p>
+      </div>
+    );
+  }
+  
+  if (!isAuthorized) return null;
+
 
   if (!module || !course) {
     return <p className="text-center text-destructive-foreground bg-destructive p-4 rounded-md">Module or course not found.</p>;
@@ -69,11 +104,7 @@ export default async function ModuleDetailPage({ params }: ModuleDetailPageProps
                   Take Assessment
                 </Link>
               </Button>
-              <Button asChild className="w-full" variant="outline">
-                <Link href={`/study-guide?topic=${encodeURIComponent(module.title)}&transcript=${encodeURIComponent(module.transcript)}`}>
-                  Generate Study Guide
-                </Link>
-              </Button>
+              {/* Removed Study Guide button */}
                {/* Placeholder for certificate link, actual logic would be more complex */}
               <Button asChild className="w-full" variant="secondary">
                 <Link href={`/courses/${params.courseId}/certificate`}>
