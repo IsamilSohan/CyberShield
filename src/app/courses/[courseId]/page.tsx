@@ -7,14 +7,13 @@ import { VideoPlayer } from '@/components/courses/VideoPlayer';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, Loader2, PlayCircle, CheckSquare, Award } from 'lucide-react';
+import { ArrowLeft, Info, Loader2, PlayCircle, CheckSquare } from 'lucide-react'; // Removed Award
 import { Badge } from '@/components/ui/badge';
-import { auth, db } from '@/lib/firebase'; // Import db
+import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import type { Course } from '@/lib/types';
-import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
+import { doc, getDoc } from 'firebase/firestore'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-// ScrollArea was removed from this page in previous changes, ListChecks also seems unused here now.
 
 export default function CourseDetailPage() {
   const router = useRouter();
@@ -22,7 +21,7 @@ export default function CourseDetailPage() {
   const courseId = params.courseId;
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [course, setCourse] = useState<Course | null | undefined>(undefined); // undefined: loading, null: not found
+  const [course, setCourse] = useState<Course | null | undefined>(undefined); 
   const [isLoadingPage, setIsLoadingPage] = useState(true);
 
   useEffect(() => {
@@ -32,7 +31,7 @@ export default function CourseDetailPage() {
         async function fetchCourseFromDb() {
           if (!courseId) {
             setIsLoadingPage(false);
-            setCourse(null); // No courseId, so course not found
+            setCourse(null); 
             return;
           }
           try {
@@ -48,11 +47,11 @@ export default function CourseDetailPage() {
                 imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
                 imageHint: data.imageHint || 'education technology',
                 videoUrl: data.videoUrl || '',
-                prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [], // Ensure it's an array
+                prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [], 
                 quizId: data.quizId || '',
               } as Course);
             } else {
-              setCourse(null); // Course not found
+              setCourse(null); 
             }
           } catch (error) {
             console.error("Error fetching course:", error);
@@ -79,8 +78,6 @@ export default function CourseDetailPage() {
   }
 
   if (!currentUser) {
-    // This case should ideally be handled by the redirect in useEffect,
-    // but as a fallback:
     return <p>Please log in to view this course.</p>;
   }
 
@@ -153,19 +150,14 @@ export default function CourseDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                After watching the video, test your knowledge or claim your certificate.
+                After watching the video, test your knowledge.
               </p>
               <Button asChild className="w-full" variant="default" disabled={!course.quizId}>
                 <Link href={`/courses/${course.id}/assessment`}> 
                   Attempt Quiz
                 </Link>
               </Button>
-              <Button asChild className="w-full" variant="secondary">
-                <Link href={`/courses/${course.id}/certificate`}>
-                  <Award className="mr-2 h-4 w-4" />
-                  View Certificate (Mock)
-                </Link>
-              </Button>
+              {/* Removed View Certificate Button */}
             </CardContent>
           </Card>
         </aside>
