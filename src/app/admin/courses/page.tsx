@@ -4,10 +4,43 @@ import { ArrowLeft, BookOpen, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { placeholderCourses } from '@/lib/data';
+import type { Course } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query } from 'firebase/firestore';
 
-export default function AdminCoursesPage() {
-  const courses = placeholderCourses;
+async function getCoursesFromFirestore(): Promise<Course[]> {
+  const coursesCol = collection(db, 'courses');
+  const q = query(coursesCol);
+  const courseSnapshot = await getDocs(q);
+  const coursesList = courseSnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      title: data.title || 'Untitled Course',
+      description: data.description || '',
+      longDescription: data.longDescription || '',
+      imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+      imageHint: data.imageHint || 'education technology',
+      // Firestore typically stores arrays directly.
+      // Ensure your Firestore documents have 'modules' as an array of module objects
+      // and 'prerequisites' as an array of strings.
+      modules: data.modules || [], 
+      prerequisites: data.prerequisites || [],
+    } as Course;
+  });
+  return coursesList;
+}
+
+export default async function AdminCoursesPage() {
+  let courses: Course[] = [];
+  let error: string | null = null;
+
+  try {
+    courses = await getCoursesFromFirestore();
+  } catch (e) {
+    console.error("Failed to fetch courses from Firestore:", e);
+    error = "Failed to load courses. Please ensure Firebase is configured correctly and you have a 'courses' collection.";
+  }
 
   return (
     <div className="space-y-6">
@@ -22,10 +55,13 @@ export default function AdminCoursesPage() {
             <BookOpen className="mr-3 h-6 w-6 text-primary" />
             Course Management
           </CardTitle>
-          <CardDescription>View and manage application courses.</CardDescription>
+          <CardDescription>View and manage application courses from Firestore.</CardDescription>
         </CardHeader>
         <CardContent>
-          {courses.length > 0 ? (
+          {error && (
+            <p className="text-destructive bg-destructive/10 p-3 rounded-md">{error}</p>
+          )}
+          {!error && courses.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -55,8 +91,8 @@ export default function AdminCoursesPage() {
                 </TableBody>
               </Table>
             </div>
-          ) : (
-            <p className="text-muted-foreground">No courses found.</p>
+          ) : !error && (
+            <p className="text-muted-foreground">No courses found in Firestore, or Firebase is not configured.</p>
           )}
            <div className="mt-6 text-right">
             <Button>Add New Course</Button>
