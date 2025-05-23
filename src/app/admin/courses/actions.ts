@@ -1,17 +1,16 @@
 
 'use server';
 
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { adminDb } from '@/lib/firebase-admin'; // Using Firebase Admin SDK
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course } from '@/lib/types'; // Ensure Course type is imported
+import type { Course } from '@/lib/types'; 
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
 
-
 export async function addCourse(data: NewCourseInput) {
   try {
+    // Validate input data
     const validatedData = NewCourseSchema.parse(data);
 
     const finalImageUrl = (validatedData.imageUrl === "" || validatedData.imageUrl === undefined)
@@ -28,24 +27,34 @@ export async function addCourse(data: NewCourseInput) {
       longDescription: validatedData.longDescription || '',
       imageUrl: finalImageUrl,
       imageHint: validatedData.imageHint || 'education technology',
-      videoUrl: validatedData.videoUrl || '',
+      videoUrl: validatedData.videoUrl || '', // Course-level video URL
       prerequisites: prerequisitesArray,
-      quizId: '', // Explicitly initialize quizId
+      quizId: '', // Initialize quizId as empty
     };
 
-    console.log('Attempting to add course with data:', newCourseData);
+    console.log('Attempting to add course with data (Admin SDK):', newCourseData);
 
-    const docRef = await addDoc(collection(db, 'courses'), newCourseData);
-    console.log('Course added with ID: ', docRef.id);
+    if (!adminDb) {
+      console.error('Error adding course: Firebase Admin SDK is not initialized. Ensure FIREBASE_SERVICE_ACCOUNT_KEY_JSON is set.');
+      return {
+        success: false,
+        message: 'Server configuration error: Unable to connect to the database. Please contact support.',
+      };
+    }
+
+    const coursesCollection = adminDb.collection('courses');
+    const docRef = await coursesCollection.add(newCourseData);
+    console.log('Course added with ID (Admin SDK): ', docRef.id);
 
     revalidatePath('/admin/courses');
     revalidatePath(`/courses/${docRef.id}`);
     revalidatePath('/');
-
-    // If addDoc is successful, redirect. This should be the last operation in the try block.
+    
+    // Redirect is a special Next.js error, must be thrown, not returned.
+    // It should be the last operation in the try block if successful.
     redirect('/admin/courses');
 
-  } catch (error: any) { // Changed error type to any to access .message or .code
+  } catch (error: any) { 
     console.error('Error adding course: ', error); 
     if (error instanceof z.ZodError) {
       const fieldErrors = error.flatten().fieldErrors;
@@ -54,9 +63,14 @@ export async function addCourse(data: NewCourseInput) {
       
       if (formErrors.length > 0) {
         customMessage = formErrors.join(' ');
-      }
-      else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
-        customMessage = 'Some fields have validation errors. Please review them.';
+      } else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
+        // Check if it's the specific module title/URL pairing error
+        if (fieldErrors.initialModuleTitle?.includes("Module title and video URL must be provided together, or both left blank.") || 
+            fieldErrors.initialModuleVideoUrl?.includes("Module title and video URL must be provided together, or both left blank.")) {
+             customMessage = "If providing an initial module title, you must also provide a video URL (and vice-versa), or leave both blank.";
+        } else {
+            customMessage = 'Some fields have validation errors. Please review them.';
+        }
       }
       
       return {
@@ -65,11 +79,11 @@ export async function addCourse(data: NewCourseInput) {
         errors: fieldErrors as Record<string, string[]>,
       };
     }
-    // For non-Zod errors (e.g., Firestore write errors)
+    
     let detail = '';
     if (error.message) {
       detail = ` Details: ${error.message}`;
-    } else if (error.code) { // Firestore errors often have a .code
+    } else if (error.code) { 
       detail = ` Code: ${error.code}`;
     } else {
       detail = ` Details: ${String(error)}`;
@@ -79,4 +93,6 @@ export async function addCourse(data: NewCourseInput) {
       message: `Failed to add course. Please try again or check server logs.${detail}`,
     };
   }
+  // No code should be reachable here if the try block succeeds and redirects,
+  // or if the catch block returns.
 }
