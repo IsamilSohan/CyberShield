@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { getCourseById } from '@/lib/data'; // Still used for initial structure, could be replaced by Firestore fetch
+import { useRouter, useParams } from 'next/navigation'; // Added useParams
+import { getCourseById } from '@/lib/data'; 
 import { ModuleListItem } from '@/components/courses/ModuleListItem';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -12,20 +12,21 @@ import { ArrowLeft, Info, ListChecks, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import type { Course } from '@/lib/types'; // Keep this for course structure type
+import type { Course } from '@/lib/types'; 
 
 // Firestore imports - if fetching course details directly from Firestore
 // import { doc, getDoc } from 'firebase/firestore';
 // import { db } from '@/lib/firebase';
 
-type CourseDetailPageProps = {
-  params: { courseId: string };
-};
+// CourseDetailPageProps type removed
 
-export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+export default function CourseDetailPage() {
   const router = useRouter();
+  const params = useParams<{ courseId: string }>(); // Use useParams hook
+  const courseId = params.courseId; // Extract courseId
+
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [course, setCourse] = useState<Course | null | undefined>(undefined); // undefined for initial loading state
+  const [course, setCourse] = useState<Course | null | undefined>(undefined); 
   const [isLoadingPage, setIsLoadingPage] = useState(true);
 
   useEffect(() => {
@@ -34,12 +35,12 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         setCurrentUser(user);
         // Fetch course data (mock or Firestore)
         // For now, using existing getCourseById from mock data
-        const fetchedCourse = getCourseById(params.courseId);
+        const fetchedCourse = getCourseById(courseId); // Use extracted courseId
         setCourse(fetchedCourse);
         setIsLoadingPage(false);
         // TODO: Replace with Firestore fetch if courses are only in DB
         // async function fetchCourseFromDb() {
-        //   const courseRef = doc(db, "courses", params.courseId);
+        //   const courseRef = doc(db, "courses", courseId);
         //   const courseSnap = await getDoc(courseRef);
         //   if (courseSnap.exists()) {
         //     setCourse({ id: courseSnap.id, ...courseSnap.data() } as Course);
@@ -50,11 +51,11 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
         // }
         // fetchCourseFromDb();
       } else {
-        router.push('/auth/login?redirect=/courses/' + params.courseId);
+        router.push('/auth/login?redirect=/courses/' + courseId); // Use extracted courseId
       }
     });
     return () => unsubscribe();
-  }, [router, params.courseId]);
+  }, [router, courseId]); // Use extracted courseId in dependency array
 
   if (isLoadingPage || course === undefined) {
     return (
@@ -134,5 +135,3 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     </div>
   );
 }
-
-// generateStaticParams has been removed from this file.
