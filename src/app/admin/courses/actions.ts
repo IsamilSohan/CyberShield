@@ -4,7 +4,7 @@
 import { adminDb } from '@/lib/firebase-admin'; // Using Firebase Admin SDK
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course } from '@/lib/types'; 
+import type { Course } from '@/lib/types';
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
 
@@ -21,6 +21,7 @@ export async function addCourse(data: NewCourseInput) {
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
 
+    // Simplified structure: no initial module directly from this form
     const newCourseData: Omit<Course, 'id'> = {
       title: validatedData.title,
       description: validatedData.description,
@@ -35,10 +36,10 @@ export async function addCourse(data: NewCourseInput) {
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
 
     if (!adminDb) {
-      console.error('Error adding course: Firebase Admin SDK is not initialized. Ensure FIREBASE_SERVICE_ACCOUNT_KEY_JSON is set.');
+      console.error('Error adding course: Firebase Admin SDK is not initialized. Ensure FIREBASE_SERVICE_ACCOUNT_KEY_JSON is set and valid, and the server was restarted.');
       return {
         success: false,
-        message: 'Server configuration error: Unable to connect to the database. Please contact support.',
+        message: 'Server configuration error: Unable to connect to the database. Please contact support. (Admin SDK not initialized)',
       };
     }
 
@@ -64,13 +65,7 @@ export async function addCourse(data: NewCourseInput) {
       if (formErrors.length > 0) {
         customMessage = formErrors.join(' ');
       } else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
-        // Check if it's the specific module title/URL pairing error
-        if (fieldErrors.initialModuleTitle?.includes("Module title and video URL must be provided together, or both left blank.") || 
-            fieldErrors.initialModuleVideoUrl?.includes("Module title and video URL must be provided together, or both left blank.")) {
-             customMessage = "If providing an initial module title, you must also provide a video URL (and vice-versa), or leave both blank.";
-        } else {
-            customMessage = 'Some fields have validation errors. Please review them.';
-        }
+          customMessage = 'Some fields have validation errors. Please review them.';
       }
       
       return {
