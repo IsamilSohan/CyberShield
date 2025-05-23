@@ -1,6 +1,6 @@
 
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Edit, PlusCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -21,9 +21,6 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
       longDescription: data.longDescription || '',
       imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
       imageHint: data.imageHint || 'education technology',
-      // Firestore typically stores arrays directly.
-      // Ensure your Firestore documents have 'modules' as an array of module objects
-      // and 'prerequisites' as an array of strings.
       modules: data.modules || [], 
       prerequisites: data.prerequisites || [],
     } as Course;
@@ -50,12 +47,20 @@ export default async function AdminCoursesPage() {
       </Link>
 
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center text-2xl">
-            <BookOpen className="mr-3 h-6 w-6 text-primary" />
-            Course Management
-          </CardTitle>
-          <CardDescription>View and manage application courses from Firestore.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center text-2xl">
+              <BookOpen className="mr-3 h-6 w-6 text-primary" />
+              Course Management
+            </CardTitle>
+            <CardDescription>View and manage application courses from Firestore.</CardDescription>
+          </div>
+          <Button asChild>
+            <Link href="/admin/courses/new">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add New Course
+            </Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {error && (
@@ -92,11 +97,8 @@ export default async function AdminCoursesPage() {
               </Table>
             </div>
           ) : !error && (
-            <p className="text-muted-foreground">No courses found in Firestore, or Firebase is not configured.</p>
+            <p className="text-muted-foreground">No courses found in Firestore, or Firebase is not configured. Click "Add New Course" to get started.</p>
           )}
-           <div className="mt-6 text-right">
-            <Button>Add New Course</Button>
-          </div>
         </CardContent>
       </Card>
     </div>
