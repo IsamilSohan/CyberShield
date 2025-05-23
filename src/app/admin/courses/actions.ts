@@ -5,7 +5,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course } from '@/lib/types';
+import type { Course } from '@/lib/types'; // Ensure Course type is imported
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
 
@@ -30,8 +30,10 @@ export async function addCourse(data: NewCourseInput) {
       imageHint: validatedData.imageHint || 'education technology',
       videoUrl: validatedData.videoUrl || '',
       prerequisites: prerequisitesArray,
-      // quizId can be added later
+      quizId: '', // Explicitly initialize quizId
     };
+
+    console.log('Attempting to add course with data:', newCourseData); // Added for debugging
 
     const docRef = await addDoc(collection(db, 'courses'), newCourseData);
     console.log('Course added with ID: ', docRef.id);
@@ -40,16 +42,24 @@ export async function addCourse(data: NewCourseInput) {
     revalidatePath(`/courses/${docRef.id}`);
     revalidatePath('/');
 
+    // If addDoc is successful, redirect. This should be the last operation in the try block.
     redirect('/admin/courses');
 
   } catch (error) {
-    console.error('Error adding course: ', error);
+    console.error('Error adding course: ', error); // Crucial: Check server logs for this output
     if (error instanceof z.ZodError) {
       const fieldErrors = error.flatten().fieldErrors;
       const formErrors = error.flatten().formErrors;
       let customMessage = 'Validation failed. Please check your inputs.';
+      
+      // Check if there are form-level errors (e.g. from .refine)
       if (formErrors.length > 0) {
         customMessage = formErrors.join(' ');
+      }
+      // If no form-level errors, but field errors exist, provide a general message
+      // but still return field errors for the form to highlight specific inputs.
+      else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
+        customMessage = 'Some fields have validation errors. Please review them.';
       }
       
       return {
@@ -58,9 +68,13 @@ export async function addCourse(data: NewCourseInput) {
         errors: fieldErrors as Record<string, string[]>,
       };
     }
+    // For non-Zod errors (e.g., Firestore write errors)
     return {
       success: false,
-      message: 'Failed to add course. Please try again.',
+      message: 'Failed to add course. Please try again. Check server logs for details.',
     };
   }
+  // No code should be reachable here if the try block succeeds and redirects,
+  // or if the catch block returns.
 }
+
