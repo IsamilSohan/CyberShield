@@ -24,7 +24,9 @@ export async function addCourse(data: NewCourseInput) {
       : [];
 
     const modules: Module[] = [];
-    if (validatedData.initialModuleTitle && validatedData.initialModuleVideoUrl) {
+    // Ensure both title and URL are present and not empty strings before creating a module
+    if (validatedData.initialModuleTitle && validatedData.initialModuleTitle.trim() !== '' && 
+        validatedData.initialModuleVideoUrl && validatedData.initialModuleVideoUrl.trim() !== '') {
       modules.push({
         id: `module-${Date.now()}-${Math.random().toString(36).substring(2,7)}`, // Simple unique ID
         title: validatedData.initialModuleTitle,
@@ -63,17 +65,22 @@ export async function addCourse(data: NewCourseInput) {
         path: issue.path,
       })).fieldErrors;
 
-      // Specifically check for the refine error message for module title/URL
+      // Check for our custom refine error message or other general form errors
       const formErrors = error.flatten().formErrors;
       let customMessage = 'Validation failed. Please check your inputs.';
-      if (formErrors.length > 0 && formErrors.some(fe => fe.includes("initial module title and video URL must be provided"))) {
-         customMessage = "If providing an initial module title, you must also provide a video URL, and vice-versa.";
+      
+      // Check if the specific refine error message is present
+      const refineErrorMessage = "If providing an initial module title, you must also provide a video URL (and vice-versa), or leave both blank.";
+      if (formErrors.some(fe => fe.includes("initial module title, you must also provide a video URL"))) {
+         customMessage = refineErrorMessage;
+      } else if (formErrors.length > 0) {
+        customMessage = formErrors.join(' '); // Join other form errors if they exist
       }
       
       return {
         success: false,
         message: customMessage,
-        errors: fieldErrors as Record<string, string[]>, // Ensure type compatibility
+        errors: fieldErrors as Record<string, string[]>, 
       };
     }
     return {

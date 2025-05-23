@@ -59,16 +59,21 @@ export const NewCourseSchema = z.object({
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().optional(),
   prerequisites: z.string().optional(), // Will be comma-separated string
-  initialModuleTitle: z.string().min(3, "Initial module title must be at least 3 characters if video URL is provided.").optional().or(z.literal('')),
+  initialModuleTitle: z.string().min(3, "Initial module title must be at least 3 characters if provided.").optional().or(z.literal('')),
   initialModuleVideoUrl: z.string().url({ message: "Initial module video URL must be a valid URL if provided." }).optional().or(z.literal('')),
 }).refine(data => {
-  // If one initial module field is filled, the other must be too
-  if (data.initialModuleTitle && !data.initialModuleVideoUrl) return false;
-  if (!data.initialModuleTitle && data.initialModuleVideoUrl) return false;
-  return true;
+  const titleIsProvided = !!(data.initialModuleTitle && data.initialModuleTitle.trim() !== '');
+  const urlIsProvided = !!(data.initialModuleVideoUrl && data.initialModuleVideoUrl.trim() !== '');
+  // Both must be provided together, or neither provided.
+  return titleIsProvided === urlIsProvided;
 }, {
-  message: "Both initial module title and video URL must be provided if one is entered.",
-  path: ["initialModuleTitle"], // Or path: ["initialModuleVideoUrl"]
+  message: "If providing an initial module title, you must also provide a video URL (and vice-versa), or leave both blank.",
+  // This error message will appear as a general form error if not caught specifically by path.
+  // For better UX, individual field errors are preferred, but refine affects the whole object.
+  // We'll handle displaying this generic message in the toast.
+  // Setting a path here would associate it with a specific field, which might be misleading
+  // if the issue is the combination. For now, it'll be a general form error.
+  // path: ["initialModuleTitle"], // Optionally associate with a field
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
