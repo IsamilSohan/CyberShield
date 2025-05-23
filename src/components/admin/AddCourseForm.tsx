@@ -16,7 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { addCourse, NewCourseSchema, type NewCourseInput } from '@/app/admin/courses/actions';
+import { addCourse } from '@/app/admin/courses/actions';
+import { NewCourseSchema, type NewCourseInput } from '@/lib/types'; // Updated import
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -32,7 +33,7 @@ export function AddCourseForm() {
       title: "",
       description: "",
       longDescription: "",
-      imageUrl: "", // Will default to placeholder if submitted empty via schema transform
+      imageUrl: "", 
       imageHint: "education technology",
       prerequisites: "",
     },
@@ -43,16 +44,12 @@ export function AddCourseForm() {
     try {
       const result = await addCourse(values);
 
-      // The redirect in the server action will handle success.
-      // Server actions that redirect cannot return a value.
-      // If there's an error object, it means the redirect didn't happen.
       if (result?.success === false) {
         toast({
           title: "Error Adding Course",
           description: result.message || "An unexpected error occurred.",
           variant: "destructive",
         });
-        // You could also set form errors here if `result.errors` is populated
         if (result.errors) {
           Object.entries(result.errors).forEach(([field, messages]) => {
             if (messages && messages.length > 0) {
@@ -61,13 +58,10 @@ export function AddCourseForm() {
           });
         }
       } else if (!result) {
-         // If result is undefined, it means redirect is happening.
-         // Toast for optimistic update (though redirect will take over)
         toast({
           title: "Course Added!",
           description: "The new course has been successfully created.",
         });
-        // router.push('/admin/courses') is handled by redirect in server action
       }
     } catch (error) {
       console.error("Form submission error:", error);
