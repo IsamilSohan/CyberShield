@@ -6,14 +6,16 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course } from '@/lib/types'; // Ensure this path is correct
+import type { Course } from '@/lib/types';
 
 // Schema for validating new course data from the form
 export const NewCourseSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters."),
   description: z.string().min(10, "Description must be at least 10 characters."),
   longDescription: z.string().optional(),
-  imageUrl: z.string().url("Please enter a valid URL.").or(z.literal("")).transform(val => val === "" ? `https://placehold.co/600x400.png` : val),
+  // imageUrl can be a valid URL or an empty string. It's optional in the sense that if not provided, it's fine.
+  // The form will provide an empty string by default if not filled.
+  imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().optional(),
   prerequisites: z.string().optional(), // Will be comma-separated string
 });
@@ -24,6 +26,11 @@ export async function addCourse(data: NewCourseInput) {
   try {
     const validatedData = NewCourseSchema.parse(data);
 
+    // Handle default imageUrl if it's empty or not provided
+    const finalImageUrl = (validatedData.imageUrl === "" || validatedData.imageUrl === undefined)
+      ? `https://placehold.co/600x400.png`
+      : validatedData.imageUrl;
+
     const prerequisitesArray = validatedData.prerequisites
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
@@ -32,20 +39,19 @@ export async function addCourse(data: NewCourseInput) {
       title: validatedData.title,
       description: validatedData.description,
       longDescription: validatedData.longDescription || '',
-      imageUrl: validatedData.imageUrl,
+      imageUrl: finalImageUrl,
       imageHint: validatedData.imageHint || 'education technology',
       modules: [], // Initialize with empty modules
       prerequisites: prerequisitesArray,
-      // You might want to add createdAt/updatedAt timestamps
-      // createdAt: serverTimestamp(), 
+      // Consider adding createdAt: serverTimestamp() here if needed
     };
 
     const docRef = await addDoc(collection(db, 'courses'), newCourseData);
     console.log('Course added with ID: ', docRef.id);
 
-    revalidatePath('/admin/courses'); // Revalidate the courses list page
-    revalidatePath(`/courses/${docRef.id}`); // Revalidate specific course page if it exists
-    revalidatePath('/'); // Revalidate home page if courses are listed there
+    revalidatePath('/admin/courses');
+    revalidatePath(`/courses/${docRef.id}`);
+    revalidatePath('/');
 
   } catch (error) {
     console.error('Error adding course: ', error);
@@ -62,7 +68,5 @@ export async function addCourse(data: NewCourseInput) {
     };
   }
 
-  // Redirect after successful submission (if no errors occurred before this point)
-  // This needs to be outside the try block for redirect to work correctly with Next.js server actions
   redirect('/admin/courses');
 }
