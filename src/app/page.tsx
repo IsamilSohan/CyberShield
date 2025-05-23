@@ -1,9 +1,37 @@
-import { CourseCard } from '@/components/courses/CourseCard';
-import { placeholderCourses } from '@/lib/data';
-import { APP_NAME } from '@/lib/constants';
 
-export default function HomePage() {
-  const courses = placeholderCourses;
+import { CourseCard } from '@/components/courses/CourseCard';
+import { APP_NAME } from '@/lib/constants';
+import type { Course } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore'; // Renamed query to avoid conflict if any
+
+async function getCoursesFromFirestore(): Promise<Course[]> {
+  try {
+    const coursesCol = collection(db, 'courses');
+    const q = firestoreQuery(coursesCol); // Use the renamed import
+    const courseSnapshot = await getDocs(q);
+    const coursesList = courseSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title || 'Untitled Course',
+        description: data.description || '',
+        longDescription: data.longDescription || '',
+        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+        imageHint: data.imageHint || 'education technology',
+        modules: data.modules || [],
+        prerequisites: data.prerequisites || [],
+      } as Course;
+    });
+    return coursesList;
+  } catch (error) {
+    console.error("Error fetching courses from Firestore for homepage:", error);
+    return []; // Return an empty array in case of an error
+  }
+}
+
+export default async function HomePage() {
+  const courses = await getCoursesFromFirestore();
 
   return (
     <div className="space-y-8">
@@ -25,7 +53,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="text-center text-muted-foreground">No courses available at the moment. Please check back soon!</p>
+          <p className="text-center text-muted-foreground">No courses available at the moment. Please check back soon or ensure Firebase is configured correctly.</p>
         )}
       </section>
     </div>
