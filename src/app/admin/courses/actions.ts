@@ -33,7 +33,7 @@ export async function addCourse(data: NewCourseInput) {
       quizId: '', // Explicitly initialize quizId
     };
 
-    console.log('Attempting to add course with data:', newCourseData); // Added for debugging
+    console.log('Attempting to add course with data:', newCourseData);
 
     const docRef = await addDoc(collection(db, 'courses'), newCourseData);
     console.log('Course added with ID: ', docRef.id);
@@ -45,19 +45,16 @@ export async function addCourse(data: NewCourseInput) {
     // If addDoc is successful, redirect. This should be the last operation in the try block.
     redirect('/admin/courses');
 
-  } catch (error) {
-    console.error('Error adding course: ', error); // Crucial: Check server logs for this output
+  } catch (error: any) { // Changed error type to any to access .message or .code
+    console.error('Error adding course: ', error); 
     if (error instanceof z.ZodError) {
       const fieldErrors = error.flatten().fieldErrors;
       const formErrors = error.flatten().formErrors;
       let customMessage = 'Validation failed. Please check your inputs.';
       
-      // Check if there are form-level errors (e.g. from .refine)
       if (formErrors.length > 0) {
         customMessage = formErrors.join(' ');
       }
-      // If no form-level errors, but field errors exist, provide a general message
-      // but still return field errors for the form to highlight specific inputs.
       else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
         customMessage = 'Some fields have validation errors. Please review them.';
       }
@@ -69,12 +66,17 @@ export async function addCourse(data: NewCourseInput) {
       };
     }
     // For non-Zod errors (e.g., Firestore write errors)
+    let detail = '';
+    if (error.message) {
+      detail = ` Details: ${error.message}`;
+    } else if (error.code) { // Firestore errors often have a .code
+      detail = ` Code: ${error.code}`;
+    } else {
+      detail = ` Details: ${String(error)}`;
+    }
     return {
       success: false,
-      message: 'Failed to add course. Please try again. Check server logs for details.',
+      message: `Failed to add course. Please try again or check server logs.${detail}`,
     };
   }
-  // No code should be reachable here if the try block succeeds and redirects,
-  // or if the catch block returns.
 }
-
