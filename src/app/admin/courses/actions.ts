@@ -43,15 +43,18 @@ export async function addCourse(data: NewCourseInput) {
       imageHint: validatedData.imageHint || 'education technology',
       modules: [], // Initialize with empty modules
       prerequisites: prerequisitesArray,
-      // Consider adding createdAt: serverTimestamp() here if needed
+      // Consider adding createdAt: serverTimestamp() here if needed for sorting or tracking
     };
 
     const docRef = await addDoc(collection(db, 'courses'), newCourseData);
     console.log('Course added with ID: ', docRef.id);
 
     revalidatePath('/admin/courses');
-    revalidatePath(`/courses/${docRef.id}`);
-    revalidatePath('/');
+    revalidatePath(`/courses/${docRef.id}`); // If you have individual course pages
+    revalidatePath('/'); // If courses are displayed on the homepage
+
+    // Redirect after all successful operations within the try block
+    redirect('/admin/courses');
 
   } catch (error) {
     console.error('Error adding course: ', error);
@@ -67,6 +70,7 @@ export async function addCourse(data: NewCourseInput) {
       message: 'Failed to add course. Please try again.',
     };
   }
-
-  redirect('/admin/courses');
+  // No code should be reachable here if the try block succeeds and redirects,
+  // or if the catch block returns.
 }
+
