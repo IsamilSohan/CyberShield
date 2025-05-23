@@ -17,10 +17,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { addCourse } from '@/app/admin/courses/actions';
-import { NewCourseSchema, type NewCourseInput } from '@/lib/types'; // Updated import
+import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
+import { Separator } from "@/components/ui/separator";
 
 export function AddCourseForm() {
   const { toast } = useToast();
@@ -33,9 +34,11 @@ export function AddCourseForm() {
       title: "",
       description: "",
       longDescription: "",
-      imageUrl: "", 
+      imageUrl: "",
       imageHint: "education technology",
       prerequisites: "",
+      initialModuleTitle: "",
+      initialModuleVideoUrl: "",
     },
   });
 
@@ -62,6 +65,7 @@ export function AddCourseForm() {
           title: "Course Added!",
           description: "The new course has been successfully created.",
         });
+        // router.push('/admin/courses'); // Redirect is handled by the action
       }
     } catch (error) {
       console.error("Form submission error:", error);
@@ -171,11 +175,48 @@ export function AddCourseForm() {
           )}
         />
         
+        <Separator className="my-8" />
+        <h3 className="text-lg font-medium">Initial Module (Optional)</h3>
         <p className="text-sm text-muted-foreground">
-          Modules can be added by editing the course after it has been created.
+          You can add one module to get started. More modules can be added by editing the course later.
         </p>
 
-        <div className="flex justify-end gap-4">
+        <FormField
+          control={form.control}
+          name="initialModuleTitle"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Initial Module Title</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Welcome to the Course" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="initialModuleVideoUrl"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Initial Module Video URL</FormLabel>
+              <FormControl>
+                <Input placeholder="https://www.youtube.com/watch?v=..." {...field} />
+              </FormControl>
+               <FormDescription>
+                Paste the full YouTube (or other video platform) URL here.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <p className="text-sm text-muted-foreground mt-4">
+          Transcript and duration for this initial module can be added later by editing the course.
+        </p>
+
+        <div className="flex justify-end gap-4 pt-4">
             <Button type="button" variant="outline" onClick={() => router.back()}>
                 Cancel
             </Button>

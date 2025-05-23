@@ -25,8 +25,8 @@ export interface Module {
   id: string;
   title: string;
   videoUrl: string;
-  transcript: string;
-  duration: string; // e.g., "15 min"
+  transcript?: string; // Made optional
+  duration?: string; // e.g., "15 min" - Made optional
 }
 
 export interface AssessmentQuestion {
@@ -59,6 +59,16 @@ export const NewCourseSchema = z.object({
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().optional(),
   prerequisites: z.string().optional(), // Will be comma-separated string
+  initialModuleTitle: z.string().min(3, "Initial module title must be at least 3 characters if video URL is provided.").optional().or(z.literal('')),
+  initialModuleVideoUrl: z.string().url({ message: "Initial module video URL must be a valid URL if provided." }).optional().or(z.literal('')),
+}).refine(data => {
+  // If one initial module field is filled, the other must be too
+  if (data.initialModuleTitle && !data.initialModuleVideoUrl) return false;
+  if (!data.initialModuleTitle && data.initialModuleVideoUrl) return false;
+  return true;
+}, {
+  message: "Both initial module title and video URL must be provided if one is entered.",
+  path: ["initialModuleTitle"], // Or path: ["initialModuleVideoUrl"]
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
