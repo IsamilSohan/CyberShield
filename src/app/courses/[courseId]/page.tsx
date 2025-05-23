@@ -7,15 +7,14 @@ import { VideoPlayer } from '@/components/courses/VideoPlayer';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, ListChecks, Loader2, PlayCircle, CheckSquare, Award } from 'lucide-react';
+import { ArrowLeft, Info, Loader2, PlayCircle, CheckSquare, Award } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { auth, db } from '@/lib/firebase'; // Import db
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import type { Course } from '@/lib/types';
 import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-
+// ScrollArea was removed from this page in previous changes, ListChecks also seems unused here now.
 
 export default function CourseDetailPage() {
   const router = useRouter();
@@ -23,7 +22,7 @@ export default function CourseDetailPage() {
   const courseId = params.courseId;
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [course, setCourse] = useState<Course | null | undefined>(undefined);
+  const [course, setCourse] = useState<Course | null | undefined>(undefined); // undefined: loading, null: not found
   const [isLoadingPage, setIsLoadingPage] = useState(true);
 
   useEffect(() => {
@@ -40,7 +39,18 @@ export default function CourseDetailPage() {
             const courseRef = doc(db, "courses", courseId);
             const courseSnap = await getDoc(courseRef);
             if (courseSnap.exists()) {
-              setCourse({ id: courseSnap.id, ...courseSnap.data() } as Course);
+              const data = courseSnap.data();
+              setCourse({
+                id: courseSnap.id,
+                title: data.title || 'Untitled Course',
+                description: data.description || '',
+                longDescription: data.longDescription || '',
+                imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+                imageHint: data.imageHint || 'education technology',
+                videoUrl: data.videoUrl || '',
+                prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [], // Ensure it's an array
+                quizId: data.quizId || '',
+              } as Course);
             } else {
               setCourse(null); // Course not found
             }
@@ -69,7 +79,9 @@ export default function CourseDetailPage() {
   }
 
   if (!currentUser) {
-    return null;
+    // This case should ideally be handled by the redirect in useEffect,
+    // but as a fallback:
+    return <p>Please log in to view this course.</p>;
   }
 
   if (!course) {
@@ -103,7 +115,6 @@ export default function CourseDetailPage() {
                         />
                     </div>
                     <div className="md:col-span-2">
-                        {/* Title and short description are already in the header */}
                         {course.longDescription && <p className="text-foreground/80 mb-6">{course.longDescription}</p>}
                         
                         {course.prerequisites && course.prerequisites.length > 0 && (
@@ -116,7 +127,6 @@ export default function CourseDetailPage() {
                             </div>
                         </div>
                         )}
-                        {/* "Start Learning" button removed as video is primary content */}
                     </div>
                 </div>
             </section>
@@ -131,11 +141,6 @@ export default function CourseDetailPage() {
                     </CardContent>
                 </Card>
             )}
-            {/* Placeholder for transcript if we add it back at course level */}
-            {/* <Card>
-                <CardHeader><CardTitle>Transcript</CardTitle></CardHeader>
-                <CardContent><ScrollArea className="h-48">Course transcript...</ScrollArea></CardContent>
-            </Card> */}
         </div>
 
         <aside className="lg:col-span-1 space-y-6">
@@ -150,9 +155,7 @@ export default function CourseDetailPage() {
               <p className="text-sm text-muted-foreground">
                 After watching the video, test your knowledge or claim your certificate.
               </p>
-              {/* We will need to create a quiz system and link it via course.quizId */}
               <Button asChild className="w-full" variant="default" disabled={!course.quizId}>
-                 {/* This link needs to be updated if/when quiz system is built */}
                 <Link href={`/courses/${course.id}/assessment`}> 
                   Attempt Quiz
                 </Link>
