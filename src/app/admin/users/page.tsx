@@ -1,29 +1,38 @@
 
 import Link from 'next/link';
-import { ArrowLeft, Users, Edit, Trash2, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Users, Edit, Trash2 } from 'lucide-react'; // PlusCircle removed as Add User is not implemented
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { User } from '@/lib/types';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin'; // Using Firebase Admin SDK
 
 async function getUsersFromFirestore(): Promise<User[]> {
-  const usersCol = collection(db, 'users');
-  const q = query(usersCol);
-  const userSnapshot = await getDocs(q);
-  const usersList = userSnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id, // Firestore document ID is user.uid
-      name: data.name || 'N/A',
-      email: data.email || 'N/A',
-      enrolledCourses: data.enrolledCourses || [],
-      certificates: data.certificates || [],
-      // isAdmin: data.isAdmin || false, // If you add an isAdmin field
-    } as User;
-  });
-  return usersList;
+  if (!adminDb) {
+    console.error("AdminUsersPage: Firebase Admin SDK is not initialized. Users cannot be fetched.");
+    // Propagate a specific error or return empty to indicate failure clearly
+    throw new Error("Admin SDK not initialized, cannot fetch users.");
+  }
+  try {
+    const usersCol = adminDb.collection('users');
+    // No query needed for just listing all users from admin context
+    const userSnapshot = await usersCol.get();
+    const usersList = userSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id, // Firestore document ID is user.uid
+        name: data.name || 'N/A',
+        email: data.email || 'N/A',
+        enrolledCourses: data.enrolledCourses || [],
+        certificates: data.certificates || [],
+        // isAdmin: data.isAdmin || false, // If you add an isAdmin field
+      } as User;
+    });
+    return usersList;
+  } catch (error) {
+    console.error("Error fetching users from Firestore (Admin SDK):", error);
+    throw error; // Re-throw the error to be caught by the page component
+  }
 }
 
 export default async function AdminUsersPage() {
@@ -32,9 +41,13 @@ export default async function AdminUsersPage() {
 
   try {
     users = await getUsersFromFirestore();
-  } catch (e) {
-    console.error("Failed to fetch users from Firestore:", e);
-    error = "Failed to load users. Please ensure Firebase is configured correctly and you have a 'users' collection.";
+  } catch (e: any) {
+    console.error("Failed to fetch users for AdminUsersPage:", e.message);
+    if (e.message === "Admin SDK not initialized, cannot fetch users.") {
+      error = "Server configuration error: Unable to connect to the database to fetch users. Please check server logs. (Admin SDK not initialized)";
+    } else {
+      error = `Failed to load users. Please ensure Firebase is configured correctly and you have a 'users' collection. Details: ${e.message}`;
+    }
   }
 
   return (
@@ -51,7 +64,7 @@ export default async function AdminUsersPage() {
               <Users className="mr-3 h-6 w-6 text-primary" />
               User Management
             </CardTitle>
-            <CardDescription>View and manage application users from Firestore.</CardDescription>
+            <CardDescription>View and manage application users from Firestore (Admin Access).</CardDescription>
           </div>
           {/* <Button asChild>
             <Link href="/admin/users/new"> // Future: Add New User page
@@ -97,11 +110,8 @@ export default async function AdminUsersPage() {
               </Table>
             </div>
           ) : !error && (
-            <p className="text-muted-foreground">No users found in Firestore, or Firebase is not configured. Users will appear here after they register.</p>
+            <p className="text-muted-foreground">No users found in Firestore, or Firebase Admin SDK is not configured correctly. Users will appear here after they register.</p>
           )}
-          {/* <div className="mt-6 text-right">
-            <Button>Add New User</Button> // Kept original button, can be linked later
-          </div> */}
         </CardContent>
       </Card>
     </div>
