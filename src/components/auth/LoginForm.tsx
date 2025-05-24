@@ -20,7 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase"; // Import auth
 import { signInWithEmailAndPassword } from "firebase/auth"; // Import Firebase Auth function
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { User as FirebaseUser } from "firebase/auth";
 import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
@@ -32,6 +33,19 @@ export function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        setCurrentUser(user);
+        router.push("/"); // or to a specific dashboard/profile page
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,12 +63,15 @@ export function LoginForm() {
         title: "Login Successful",
         description: "Welcome back!",
       });
-      router.push("/"); // Redirect to homepage or dashboard
+      // The useEffect above will handle redirect on currentUser state change
+      // router.push("/"); // Can be removed if useEffect handles it
     } catch (error: any) {
       console.error("Login error:", error);
       let errorMessage = "Failed to login. Please check your credentials.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         errorMessage = "Invalid email or password. Please try again.";
+      } else if (error.code === 'auth/invalid-api-key') {
+        errorMessage = "Authentication service error. Please try again later.";
       }
       toast({
         title: "Login Error",
@@ -64,6 +81,16 @@ export function LoginForm() {
     } finally {
       setIsLoading(false);
     }
+  }
+  
+  if (currentUser) {
+    // Optionally show a loading spinner or "Redirecting..." message
+    return (
+      <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Redirecting...</p>
+      </div>
+    );
   }
 
   return (
@@ -76,7 +103,7 @@ export function LoginForm() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" suppressHydrationWarning={true}>
             <FormField
               control={form.control}
               name="email"
