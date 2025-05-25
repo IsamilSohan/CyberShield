@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { Course } from '@/lib/types';
 import { adminDb } from '@/lib/firebase-admin';
 import { CourseActions } from '@/components/admin/CourseActions'; 
-import { collection, getDocs, orderBy, query as firestoreQuery } from 'firebase/firestore'; // Use client 'db' for server components
+// Removed client-side Firestore imports: collection, getDocs, orderBy, query as firestoreQuery
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
   if (!adminDb) {
@@ -16,9 +16,8 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
     throw new Error("Admin SDK not initialized, cannot fetch courses.");
   }
   try {
-    const coursesCol = adminDb.collection('courses'); // Use adminDb
-    const q = firestoreQuery(coursesCol, orderBy('title')); // Use firestoreQuery from 'firebase/firestore'
-    const courseSnapshot = await getDocs(q);
+    // Use Admin SDK's query methods directly
+    const courseSnapshot = await adminDb.collection('courses').orderBy('title').get();
     const coursesList = courseSnapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -120,4 +119,3 @@ export default async function AdminCoursesPage() {
     </div>
   );
 }
-
