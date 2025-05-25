@@ -45,6 +45,8 @@ export function AddCourseForm() {
     try {
       const result = await addCourse(values);
 
+      // If the server action returns a result, it means an error occurred
+      // because a successful action would have redirected.
       if (result?.success === false) {
         toast({
           title: "Error Adding Course",
@@ -58,18 +60,19 @@ export function AddCourseForm() {
             }
           });
         }
-      } else if (!result) { // Successful case, redirect is handled by action
-        toast({
-          title: "Course Added!",
-          description: "The new course has been successfully created.",
-        });
-        // router.push('/admin/courses'); // Redirect is handled by the action
       }
+      // If 'addCourse' successfully redirects, this part of the 'try' block
+      // might not be reached, or 'result' would be undefined.
+      // The redirect itself is the primary success indicator.
+      // A success toast is generally not needed here as the user will be navigated away.
+      
     } catch (error) {
+      // This catch block is for client-side errors or if the addCourse promise itself rejects unexpectedly
+      // (e.g., network issue before the server action is fully processed).
       console.error("Form submission error:", error);
       toast({
         title: "Submission Error",
-        description: "An unexpected error occurred during submission.",
+        description: "An unexpected error occurred during submission. Check console.",
         variant: "destructive",
       });
     } finally {
@@ -127,7 +130,7 @@ export function AddCourseForm() {
           name="imageUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Image URL</FormLabel>
+              <FormLabel>Image URL (Optional)</FormLabel>
               <FormControl>
                 <Input placeholder="https://example.com/image.png" {...field} />
               </FormControl>
