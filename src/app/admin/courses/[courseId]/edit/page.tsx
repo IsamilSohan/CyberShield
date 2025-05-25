@@ -1,38 +1,216 @@
 
+"use client"; // Needs to be client for potential form interactions later
+
 import Link from 'next/link';
-import { ArrowLeft, Construction } from 'lucide-react';
+import { ArrowLeft, Construction, Edit3, Save, Loader2, AlertTriangle } from 'lucide-react'; // Added more icons
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { adminDb } from '@/lib/firebase-admin';
-import type { Course } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 
-type EditCoursePageProps = {
-  params: { courseId: string };
-};
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { doc, getDoc, updateDoc, getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase'; // Assuming client-side db
+import type { Course, Quiz, QuizQuestion } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
-async function getCourseData(courseId: string): Promise<Course | null> {
-  if (!adminDb) {
-    console.error("EditCoursePage: Firebase Admin SDK not initialized.");
-    return null;
-  }
-  try {
-    const courseRef = adminDb.collection('courses').doc(courseId);
-    const courseSnap = await courseRef.get();
+// Helper to generate unique IDs for new questions/options
+const generateId = () => Math.random().toString(36).substring(2, 15);
 
-    if (!courseSnap.exists) {
-      return null;
+export default function EditCoursePage() {
+  const params = useParams<{ courseId: string }>();
+  const courseId = params.courseId;
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form state for course details
+  const [courseTitle, setCourseTitle] = useState('');
+  const [courseDescription, setCourseDescription] = useState('');
+  const [courseLongDescription, setCourseLongDescription] = useState('');
+  const [courseImageUrl, setCourseImageUrl] = useState('');
+  const [courseImageHint, setCourseImageHint] = useState('');
+  const [courseVideoUrl, setCourseVideoUrl] = useState('');
+  const [coursePrerequisites, setCoursePrerequisites] = useState('');
+
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        router.push(`/auth/login?redirect=/admin/courses/${courseId}/edit`);
+      }
+    });
+    return () => unsubscribe();
+  }, [router, courseId]);
+  
+  useEffect(() => {
+    if (!courseId || !currentUser) { // Wait for currentUser to be set
+      setIsLoading(currentUser ? true : false); // only load if user is set
+      return;
     }
-    const data = courseSnap.data() as Omit<Course, 'id'>;
-    return { id: courseSnap.id, ...data };
-  } catch (error) {
-    console.error("Error fetching course for edit page:", error);
-    return null;
+    setIsLoading(true);
+    setError(null);
+
+    const fetchCourseAndQuiz = async () => {
+      try {
+        const courseRef = doc(db, 'courses', courseId as string);
+        const courseSnap = await getDoc(courseRef);
+
+        if (!courseSnap.exists()) {
+          setError('Course not found.');
+          setCourse(null);
+          setQuiz(null);
+          setIsLoading(false);
+          return;
+        }
+        
+        const fetchedCourse = { id: courseSnap.id, ...courseSnap.data() } as Course;
+        setCourse(fetchedCourse);
+        // Set form fields
+        setCourseTitle(fetchedCourse.title);
+        setCourseDescription(fetchedCourse.description);
+        setCourseLongDescription(fetchedCourse.longDescription || '');
+        setCourseImageUrl(fetchedCourse.imageUrl);
+        setCourseImageHint(fetchedCourse.imageHint || '');
+        setCourseVideoUrl(fetchedCourse.videoUrl || '');
+        setCoursePrerequisites(fetchedCourse.prerequisites?.join(', ') || '');
+
+
+        if (fetchedCourse.quizId) {
+          const quizRef = doc(db, 'quizzes', fetchedCourse.quizId);
+          const quizSnap = await getDoc(quizRef);
+          if (quizSnap.exists()) {
+            setQuiz({ id: quizSnap.id, ...quizSnap.data() } as Quiz);
+          } else {
+            console.warn(`Quiz with ID ${fetchedCourse.quizId} not found.`);
+            setQuiz(null); // Or create a new one? For edit, usually means it's missing
+          }
+        } else {
+          // No quizId linked, perhaps allow creating one here?
+          console.warn("Course has no quizId.");
+          setQuiz(null);
+        }
+
+      } catch (e) {
+        console.error("Error fetching course/quiz for edit:", e);
+        setError('Failed to load course or quiz data.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (currentUser) { // Only fetch if user is authenticated
+        fetchCourseAndQuiz();
+    }
+
+  }, [courseId, currentUser]);
+
+  const handleQuizQuestionChange = (qIndex: number, field: keyof QuizQuestion, value: string | string[] | number) => {
+    if (!quiz) return;
+    const updatedQuestions = [...quiz.questions];
+    if (field === 'options' && Array.isArray(value)) {
+       updatedQuestions[qIndex] = { ...updatedQuestions[qIndex], [field]: value };
+    } else if (field === 'correctOptionIndex' && typeof value === 'string') {
+       updatedQuestions[qIndex] = { ...updatedQuestions[qIndex], [field]: parseInt(value,10) };
+    } else if (typeof value === 'string' && (field === 'questionText' || field === 'id')) {
+       updatedQuestions[qIndex] = { ...updatedQuestions[qIndex], [field]: value };
+    }
+    setQuiz({ ...quiz, questions: updatedQuestions });
+  };
+
+  const handleOptionChange = (qIndex: number, optIndex: number, value: string) => {
+    if (!quiz) return;
+    const updatedQuestions = [...quiz.questions];
+    const updatedOptions = [...updatedQuestions[qIndex].options];
+    updatedOptions[optIndex] = value;
+    updatedQuestions[qIndex] = { ...updatedQuestions[qIndex], options: updatedOptions };
+    setQuiz({ ...quiz, questions: updatedQuestions });
+  };
+
+  const addQuizQuestion = () => {
+    if (!quiz) return; // Or initialize a new quiz object if null
+    const newQuestion: QuizQuestion = {
+      id: generateId(),
+      questionText: 'New Question',
+      options: ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
+      correctOptionIndex: 0,
+    };
+    setQuiz({ ...quiz, questions: [...quiz.questions, newQuestion] });
+  };
+
+  const removeQuizQuestion = (qIndex: number) => {
+    if (!quiz) return;
+    const updatedQuestions = quiz.questions.filter((_, index) => index !== qIndex);
+    setQuiz({ ...quiz, questions: updatedQuestions });
+  };
+  
+  const handleSaveChanges = async () => {
+    if (!course || !currentUser) {
+      toast({ title: "Error", description: "Course data or user session missing.", variant: "destructive"});
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Update Course Document
+      const courseRef = doc(db, 'courses', course.id);
+      const updatedCourseData: Partial<Course> = {
+        title: courseTitle,
+        description: courseDescription,
+        longDescription: courseLongDescription,
+        imageUrl: courseImageUrl,
+        imageHint: courseImageHint,
+        videoUrl: courseVideoUrl,
+        prerequisites: coursePrerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0),
+      };
+      batch.update(courseRef, updatedCourseData);
+
+      // 2. Update Quiz Document (if quiz exists)
+      if (quiz && course.quizId) {
+        const quizRef = doc(db, 'quizzes', course.quizId);
+        // Ensure quiz title is updated if course title changed
+        const updatedQuizData: Partial<Quiz> = {
+            ...quiz,
+            title: `Quiz for ${courseTitle}`, // Keep quiz title in sync
+        };
+        batch.update(quizRef, updatedQuizData);
+      }
+      
+      await batch.commit();
+      toast({ title: "Success", description: "Course and quiz updated successfully!" });
+      router.push('/admin/courses'); // Or back to course detail, or refresh
+    } catch (e) {
+      console.error("Error saving course/quiz:", e);
+      toast({ title: "Error Saving", description: `Failed to save changes. ${e.message}`, variant: "destructive"});
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-2">Loading course data...</p>
+      </div>
+    );
   }
-}
 
-export default async function EditCoursePage({ params }: EditCoursePageProps) {
-  const course = await getCourseData(params.courseId);
-
-  if (!course) {
+  if (error) {
     return (
       <div className="space-y-6">
         <Link href="/admin/courses" className="inline-flex items-center text-primary hover:underline">
@@ -43,16 +221,23 @@ export default async function EditCoursePage({ params }: EditCoursePageProps) {
           <CardHeader>
             <CardTitle className="text-2xl">Edit Course</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-destructive">Course not found or an error occurred.</p>
+          <CardContent className="text-center py-10">
+             <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
+            <p className="text-destructive">{error}</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
+  if (!course) {
+     // This case should ideally be covered by the error state if course isn't found.
+    return <p>Course could not be loaded.</p>;
+  }
+
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 mb-12">
       <Link href="/admin/courses" className="inline-flex items-center text-primary hover:underline">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Course Management
@@ -61,17 +246,99 @@ export default async function EditCoursePage({ params }: EditCoursePageProps) {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center text-2xl">
+            <Edit3 className="mr-3 h-6 w-6 text-primary" />
             Edit Course: {course.title}
           </CardTitle>
-          <CardDescription>Modify the details for this course. (Edit form not yet implemented)</CardDescription>
+          <CardDescription>Modify the course details and its associated quiz questions.</CardDescription>
         </CardHeader>
-        <CardContent className="text-center py-10">
-          <Construction className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">
-            The form to edit this course is under construction.
-          </p>
-          {/* Placeholder for EditCourseForm component */}
-          {/* <EditCourseForm course={course} /> */}
+        <CardContent className="space-y-6">
+          {/* Course Details Form Part */}
+          <div className="space-y-4 p-4 border rounded-md">
+            <h3 className="text-lg font-semibold">Course Information</h3>
+            <div>
+              <Label htmlFor="courseTitle">Title</Label>
+              <Input id="courseTitle" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="courseDescription">Short Description</Label>
+              <Textarea id="courseDescription" value={courseDescription} onChange={(e) => setCourseDescription(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="courseLongDescription">Long Description</Label>
+              <Textarea id="courseLongDescription" value={courseLongDescription} onChange={(e) => setCourseLongDescription(e.target.value)} className="min-h-[100px]" />
+            </div>
+            <div>
+              <Label htmlFor="courseImageUrl">Image URL</Label>
+              <Input id="courseImageUrl" value={courseImageUrl} onChange={(e) => setCourseImageUrl(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="courseImageHint">Image Hint</Label>
+              <Input id="courseImageHint" value={courseImageHint} onChange={(e) => setCourseImageHint(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="courseVideoUrl">Video URL</Label>
+              <Input id="courseVideoUrl" value={courseVideoUrl} onChange={(e) => setCourseVideoUrl(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="coursePrerequisites">Prerequisites (comma-separated)</Label>
+              <Input id="coursePrerequisites" value={coursePrerequisites} onChange={(e) => setCoursePrerequisites(e.target.value)} />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Quiz Questions Editor Part */}
+          <div className="space-y-4 p-4 border rounded-md">
+            <h3 className="text-lg font-semibold">Quiz Questions ({quiz?.title || 'No Quiz Linked'})</h3>
+            {quiz ? (
+              quiz.questions.map((q, qIndex) => (
+                <Card key={q.id || qIndex} className="p-4 space-y-3 bg-muted/50">
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor={`qtext-${q.id}`}>Question {qIndex + 1}</Label>
+                    <Button variant="destructive" size="sm" onClick={() => removeQuizQuestion(qIndex)}>Remove</Button>
+                  </div>
+                  <Textarea 
+                    id={`qtext-${q.id}`} 
+                    value={q.questionText} 
+                    onChange={(e) => handleQuizQuestionChange(qIndex, 'questionText', e.target.value)}
+                    placeholder="Question text"
+                  />
+                  <Label>Options (Mark the correct one):</Label>
+                  {q.options.map((opt, optIndex) => (
+                    <div key={optIndex} className="flex items-center gap-2">
+                      <Input 
+                        value={opt} 
+                        onChange={(e) => handleOptionChange(qIndex, optIndex, e.target.value)}
+                        placeholder={`Option ${optIndex + 1}`}
+                        className="flex-grow"
+                      />
+                      <Input 
+                        type="radio" 
+                        name={`correctOpt-${q.id}`} 
+                        value={optIndex}
+                        checked={q.correctOptionIndex === optIndex}
+                        onChange={(e) => handleQuizQuestionChange(qIndex, 'correctOptionIndex', e.target.value)}
+                        className="form-radio h-4 w-4 text-primary"
+                      />
+                    </div>
+                  ))}
+                </Card>
+              ))
+            ) : (
+              <p className="text-muted-foreground">No quiz is currently linked to this course, or quiz data could not be loaded.</p>
+            )}
+            {quiz && <Button onClick={addQuizQuestion}>Add Question</Button>}
+             {!quiz && course.quizId && <p className="text-destructive">Quiz (ID: {course.quizId}) linked but not found. It might have been deleted.</p>}
+             {!quiz && !course.quizId && <p className="text-muted-foreground">This course does not have a quiz yet. A quiz will be automatically created if you save changes and one isn't found, or you can manage it separately.</p>}
+          </div>
+          
+          <div className="flex justify-end pt-6">
+            <Button onClick={handleSaveChanges} disabled={isSaving}>
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Save className="mr-2 h-4 w-4" />
+              Save All Changes
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

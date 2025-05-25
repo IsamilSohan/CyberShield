@@ -6,16 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Course } from '@/lib/types';
 import { adminDb } from '@/lib/firebase-admin';
-import { CourseActions } from '@/components/admin/CourseActions'; // Import the new component
+import { CourseActions } from '@/components/admin/CourseActions'; 
+import { collection, getDocs, orderBy, query as firestoreQuery } from 'firebase/firestore'; // Use client 'db' for server components
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
   if (!adminDb) {
     console.error("AdminCoursesPage: Firebase Admin SDK not initialized. Courses cannot be fetched.");
+    // Consider re-throwing or returning a specific error object
     throw new Error("Admin SDK not initialized, cannot fetch courses.");
   }
   try {
-    const coursesCol = adminDb.collection('courses');
-    const courseSnapshot = await coursesCol.orderBy('title').get(); // Optionally order by title
+    const coursesCol = adminDb.collection('courses'); // Use adminDb
+    const q = firestoreQuery(coursesCol, orderBy('title')); // Use firestoreQuery from 'firebase/firestore'
+    const courseSnapshot = await getDocs(q);
     const coursesList = courseSnapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -27,13 +30,13 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
         imageHint: data.imageHint || 'education technology',
         videoUrl: data.videoUrl || '',
         prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
-        quizId: data.quizId || '',
+        quizId: data.quizId || '', 
       } as Course;
     });
     return coursesList;
   } catch (error) {
-    console.error("Error fetching courses from Firestore (Admin SDK):", error);
-    throw error;
+    console.error("Error fetching courses from Firestore (Admin SDK used on server component):", error);
+    throw error; // Re-throw to be caught by the page
   }
 }
 
@@ -47,7 +50,10 @@ export default async function AdminCoursesPage() {
     console.error("Failed to fetch courses for AdminCoursesPage:", e.message);
     if (e.message.includes("Admin SDK not initialized")) {
       error = "Server configuration error: Unable to connect to the database to fetch courses. (Admin SDK not initialized)";
-    } else {
+    } else if (e.message.includes("firestore/permission-denied")) {
+       error = "Permission denied fetching courses. Check Firestore rules or Admin SDK setup if fetching server-side.";
+    }
+    else {
       error = `Failed to load courses. Details: ${e.message}`;
     }
   }
@@ -66,7 +72,7 @@ export default async function AdminCoursesPage() {
               <BookOpen className="mr-3 h-6 w-6 text-primary" />
               Course Management
             </CardTitle>
-            <CardDescription>View and manage application courses from Firestore.</CardDescription>
+            <CardDescription>View, add, edit, and delete application courses.</CardDescription>
           </div>
           <Button asChild>
             <Link href="/admin/courses/new">
@@ -84,18 +90,20 @@ export default async function AdminCoursesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[150px]">ID</TableHead>{/*
+                    <TableHead className="w-[150px] hidden sm:table-cell">ID</TableHead>{/*
                     */}<TableHead>Title</TableHead>{/*
-                    */}<TableHead className="text-center">Has Video?</TableHead>{/*
+                    */}<TableHead className="hidden md:table-cell text-center">Has Video?</TableHead>{/*
+                    */}<TableHead className="hidden lg:table-cell text-center">Has Quiz?</TableHead>{/*
                     */}<TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {courses.map((course) => (
                     <TableRow key={course.id}>
-                      <TableCell className="font-medium truncate max-w-xs">{course.id}</TableCell>
+                      <TableCell className="font-medium truncate max-w-xs hidden sm:table-cell">{course.id}</TableCell>
                       <TableCell>{course.title}</TableCell>
-                      <TableCell className="text-center">{course.videoUrl ? 'Yes' : 'No'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-center">{course.videoUrl ? 'Yes' : 'No'}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">{course.quizId ? 'Yes' : 'No'}</TableCell>
                       <TableCell className="text-right">
                         <CourseActions courseId={course.id} courseTitle={course.title} />
                       </TableCell>
@@ -105,10 +113,11 @@ export default async function AdminCoursesPage() {
               </Table>
             </div>
           ) : !error && (
-            <p className="text-muted-foreground">No courses found in Firestore. Click "Add New Course" to get started.</p>
+            <p className="text-muted-foreground">No courses found. Click "Add New Course" to get started.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
+

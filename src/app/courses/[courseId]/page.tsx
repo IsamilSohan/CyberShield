@@ -7,7 +7,7 @@ import { VideoPlayer } from '@/components/courses/VideoPlayer';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, Loader2, PlayCircle, CheckSquare } from 'lucide-react'; // Removed Award
+import { ArrowLeft, Info, Loader2, PlayCircle, CheckSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { auth, db } from '@/lib/firebase'; 
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
@@ -35,7 +35,7 @@ export default function CourseDetailPage() {
             return;
           }
           try {
-            const courseRef = doc(db, "courses", courseId);
+            const courseRef = doc(db, "courses", courseId as string);
             const courseSnap = await getDoc(courseRef);
             if (courseSnap.exists()) {
               const data = courseSnap.data();
@@ -48,7 +48,7 @@ export default function CourseDetailPage() {
                 imageHint: data.imageHint || 'education technology',
                 videoUrl: data.videoUrl || '',
                 prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [], 
-                quizId: data.quizId || '',
+                quizId: data.quizId || '', // Ensure quizId is fetched
               } as Course);
             } else {
               setCourse(null); 
@@ -78,6 +78,7 @@ export default function CourseDetailPage() {
   }
 
   if (!currentUser) {
+    // This should ideally not be reached due to the auth check effect
     return <p>Please log in to view this course.</p>;
   }
 
@@ -157,7 +158,6 @@ export default function CourseDetailPage() {
                   Attempt Quiz
                 </Link>
               </Button>
-              {/* Removed View Certificate Button */}
             </CardContent>
           </Card>
         </aside>

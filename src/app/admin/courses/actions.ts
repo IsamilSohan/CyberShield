@@ -4,14 +4,24 @@
 import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course } from '@/lib/types';
+import type { Course, Quiz } from '@/lib/types';
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
+import { collection, addDoc as adminAddDoc, doc as adminDoc, deleteDoc as adminDeleteDoc } from 'firebase-admin/firestore'; // Use aliased imports
 
 export async function addCourse(data: NewCourseInput) {
-  let docId: string | null = null;
+  let courseDocId: string | null = null;
+  let quizDocId: string | null = null;
+
+  if (!adminDb) {
+    console.error('Error adding course: Firebase Admin SDK is not initialized. Ensure FIREBASE_SERVICE_ACCOUNT_KEY_JSON is set and valid, and the server was restarted.');
+    return {
+      success: false,
+      message: 'Server configuration error: Unable to connect to the database. Please contact support. (Admin SDK not initialized)',
+    };
+  }
+
   try {
-    // Validate input data
     const validatedData = NewCourseSchema.parse(data);
 
     const finalImageUrl = (validatedData.imageUrl === "" || validatedData.imageUrl === undefined)
@@ -22,6 +32,31 @@ export async function addCourse(data: NewCourseInput) {
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
 
+    // 1. Create the Quiz document first
+    const quizzesCollectionRef = collection(adminDb, 'quizzes');
+    const newQuizData: Omit<Quiz, 'id'> = {
+      title: `Quiz for ${validatedData.title}`,
+      courseId: '', // Will be updated after course is created, if needed, or use courseDocId if known earlier
+      questions: [ // Add a sample question
+        {
+          id: 'sample_q1',
+          questionText: 'What is the capital of France?',
+          options: ['Berlin', 'Madrid', 'Paris', 'Rome'],
+          correctOptionIndex: 2,
+        },
+        {
+          id: 'sample_q2',
+          questionText: 'Which planet is known as the Red Planet?',
+          options: ['Earth', 'Mars', 'Jupiter', 'Saturn'],
+          correctOptionIndex: 1,
+        }
+      ], 
+    };
+    const quizDocRef = await adminAddDoc(quizzesCollectionRef, newQuizData as any); // Use adminAddDoc
+    quizDocId = quizDocRef.id;
+    console.log('Quiz created with ID (Admin SDK): ', quizDocId);
+
+    // 2. Create the Course document, linking the quizId
     const newCourseData: Omit<Course, 'id'> = {
       title: validatedData.title,
       description: validatedData.description,
@@ -30,27 +65,21 @@ export async function addCourse(data: NewCourseInput) {
       imageHint: validatedData.imageHint || 'education technology',
       videoUrl: validatedData.videoUrl || '',
       prerequisites: prerequisitesArray,
-      quizId: '', // Initialize quizId as empty
+      quizId: quizDocId, // Link to the newly created quiz
     };
 
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
+    const coursesCollectionRef = collection(adminDb, 'courses');
+    const courseDocRef = await adminAddDoc(coursesCollectionRef, newCourseData as any); // Use adminAddDoc
+    courseDocId = courseDocRef.id;
+    console.log('Course added with ID (Admin SDK): ', courseDocId);
 
-    if (!adminDb) {
-      console.error('Error adding course: Firebase Admin SDK is not initialized. Ensure FIREBASE_SERVICE_ACCOUNT_KEY_JSON is set and valid, and the server was restarted.');
-      return {
-        success: false,
-        message: 'Server configuration error: Unable to connect to the database. Please contact support. (Admin SDK not initialized)',
-      };
-    }
+    // Optionally, update the quiz document with the courseId if needed for back-reference
+    // await adminDb.collection('quizzes').doc(quizDocId).update({ courseId: courseDocId });
 
-    const coursesCollection = adminDb.collection('courses');
-    const docRef = await coursesCollection.add(newCourseData);
-    docId = docRef.id; // Capture for revalidation
-    console.log('Course added with ID (Admin SDK): ', docId);
 
-  } catch (error: any) { 
-    // This catch block handles errors from Zod validation or Firestore 'add' operation
-    console.error('Error during course data processing or Firestore write: ', error); 
+  } catch (error: any) {
+    console.error('Error during course/quiz data processing or Firestore write: ', error);
     if (error instanceof z.ZodError) {
       const fieldErrors = error.flatten().fieldErrors;
       const formErrors = error.flatten().formErrors;
@@ -69,7 +98,6 @@ export async function addCourse(data: NewCourseInput) {
       };
     }
     
-    // For other errors (e.g., Firestore write failure)
     let detail = '';
     if (error.message) {
       detail = ` Details: ${error.message}`;
@@ -80,28 +108,21 @@ export async function addCourse(data: NewCourseInput) {
     }
     return {
       success: false,
-      message: `Failed to add course to database.${detail}`,
+      message: `Failed to add course/quiz to database.${detail}`,
     };
   }
 
-  // If we've reached here, the course was added to Firestore successfully.
-  // Now, attempt revalidation.
-  if (docId) {
+  if (courseDocId) {
     try {
       revalidatePath('/admin/courses');
-      revalidatePath(`/courses/${docId}`);
+      revalidatePath(`/courses/${courseDocId}`);
       revalidatePath('/');
-      console.log('Paths revalidated successfully for course ID:', docId);
+      console.log('Paths revalidated successfully for course ID:', courseDocId);
     } catch (revalidationError: any) {
-      // Log the revalidation error, but the main operation (adding course) was successful.
-      // The client will still redirect. Stale data might persist briefly.
-      console.warn(`Warning: Course ${docId} added to DB, but path revalidation failed:`, revalidationError);
+      console.warn(`Warning: Course ${courseDocId} added to DB, but path revalidation failed:`, revalidationError);
     }
   }
   
-  // Redirect after successful DB add and attempted revalidation.
-  // This call throws a special error that Next.js handles for navigation.
-  // The client form submission promise will not receive a typical return value.
   redirect('/admin/courses'); 
 }
 
@@ -120,13 +141,25 @@ export async function deleteCourse(courseId: string) {
   }
 
   try {
-    await adminDb.collection('courses').doc(courseId).delete();
+    // Optionally, delete the associated quiz if it's tightly coupled
+    const courseDocRef = adminDoc(adminDb, 'courses', courseId); // Use adminDoc
+    const courseSnap = await courseDocRef.get();
+    if (courseSnap.exists()) {
+      const courseData = courseSnap.data() as Course;
+      if (courseData.quizId) {
+        console.log('Attempting to delete associated quiz with ID (Admin SDK):', courseData.quizId);
+        await adminDeleteDoc(adminDoc(adminDb, 'quizzes', courseData.quizId)); // Use adminDeleteDoc & adminDoc
+        console.log('Associated quiz deleted successfully (Admin SDK):', courseData.quizId);
+      }
+    }
+
+    await adminDeleteDoc(courseDocRef); // Use adminDeleteDoc
     console.log('Course deleted successfully (Admin SDK):', courseId);
     revalidatePath('/admin/courses');
     revalidatePath('/'); 
-    return { success: true, message: 'Course deleted successfully.' };
+    return { success: true, message: 'Course and associated quiz deleted successfully.' };
   } catch (error: any) {
-    console.error('Error deleting course (Admin SDK):', error);
+    console.error('Error deleting course or associated quiz (Admin SDK):', error);
     let detail = '';
     if (error.message) {
       detail = ` Details: ${error.message}`;

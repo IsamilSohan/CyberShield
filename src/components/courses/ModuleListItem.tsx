@@ -1,33 +1,42 @@
+
+// This component is likely deprecated as courses now have a single video/quiz
+// directly on the course page, not a list of modules.
+// Keeping the file to prevent build errors if it's imported somewhere,
+// but it should be removed if no longer used.
+
 import Link from 'next/link';
-import type { Module } from '@/lib/types';
-import { PlayCircle, Clock } from 'lucide-react';
+// import type { Module } from '@/lib/types'; // Module type is removed or will be
+import { PlayCircle, Clock, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface ModuleListItemProps {
-  module: Module;
+  // module: Module; // Module type might be removed
+  module: { id: string, title: string, duration?: string }; // Generic module for now
   courseId: string;
   moduleNumber: number;
 }
 
 export function ModuleListItem({ module, courseId, moduleNumber }: ModuleListItemProps) {
   return (
-    <Link href={`/courses/${courseId}/${module.id}`} className="block group">
-      <Card className="hover:shadow-lg hover:border-primary transition-all duration-200 ease-in-out transform hover:scale-[1.01]">
+    <div className="block group opacity-50 cursor-not-allowed" title="Module list items are deprecated.">
+      <Card className="border-dashed border-muted-foreground">
         <CardContent className="p-4 flex items-center justify-between">
           <div className="flex items-center">
-            <PlayCircle className="h-10 w-10 text-primary mr-4 group-hover:text-accent transition-colors" />
+            <AlertTriangle className="h-10 w-10 text-muted-foreground mr-4" />
             <div>
-              <h3 className="text-lg font-medium group-hover:text-primary transition-colors">
-                Module {moduleNumber}: {module.title}
+              <h3 className="text-lg font-medium text-muted-foreground">
+                Module {moduleNumber}: {module.title} (Deprecated Structure)
               </h3>
-              <p className="text-sm text-muted-foreground flex items-center">
-                <Clock className="w-3.5 h-3.5 mr-1.5" /> {module.duration}
-              </p>
+              {module.duration && (
+                <p className="text-sm text-muted-foreground flex items-center">
+                  <Clock className="w-3.5 h-3.5 mr-1.5" /> {module.duration}
+                </p>
+              )}
+              <p className="text-xs text-destructive">This module structure is no longer primary. See course page.</p>
             </div>
           </div>
-          {/* Add a small arrow or chevron to indicate clickable */}
         </CardContent>
       </Card>
-    </Link>
+    </div>
   );
 }
