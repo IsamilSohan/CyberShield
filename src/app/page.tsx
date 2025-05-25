@@ -1,10 +1,8 @@
 
-'use client';
-
 import { CourseCard } from '@/components/courses/CourseCard';
 import { APP_NAME } from '@/lib/constants';
 import type { Course } from '@/lib/types';
-import { db } from '@/lib/firebase'; // Updated import from firebase-client.ts to firebase.ts
+import { db } from '@/lib/firebase';
 import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore';
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
