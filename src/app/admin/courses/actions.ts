@@ -1,7 +1,7 @@
 
 'use server';
 
-import { adminDb } from '@/lib/firebase-admin'; // Using Firebase Admin SDK
+import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { Course } from '@/lib/types';
@@ -21,14 +21,13 @@ export async function addCourse(data: NewCourseInput) {
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
 
-    // Simplified structure: no initial module directly from this form
     const newCourseData: Omit<Course, 'id'> = {
       title: validatedData.title,
       description: validatedData.description,
       longDescription: validatedData.longDescription || '',
       imageUrl: finalImageUrl,
       imageHint: validatedData.imageHint || 'education technology',
-      videoUrl: validatedData.videoUrl || '', // Course-level video URL
+      videoUrl: validatedData.videoUrl || '',
       prerequisites: prerequisitesArray,
       quizId: '', // Initialize quizId as empty
     };
@@ -51,8 +50,6 @@ export async function addCourse(data: NewCourseInput) {
     revalidatePath(`/courses/${docRef.id}`);
     revalidatePath('/');
     
-    // Redirect is a special Next.js error, must be thrown, not returned.
-    // It should be the last operation in the try block if successful.
     redirect('/admin/courses');
 
   } catch (error: any) { 
@@ -88,6 +85,43 @@ export async function addCourse(data: NewCourseInput) {
       message: `Failed to add course. Please try again or check server logs.${detail}`,
     };
   }
-  // No code should be reachable here if the try block succeeds and redirects,
-  // or if the catch block returns.
+}
+
+export async function deleteCourse(courseId: string) {
+  console.log('Attempting to delete course with ID (Admin SDK):', courseId);
+  if (!adminDb) {
+    console.error('Error deleting course: Firebase Admin SDK is not initialized.');
+    return {
+      success: false,
+      message: 'Server configuration error: Unable to connect to the database. (Admin SDK not initialized)',
+    };
+  }
+
+  if (!courseId) {
+    return { success: false, message: 'Course ID is required for deletion.' };
+  }
+
+  try {
+    await adminDb.collection('courses').doc(courseId).delete();
+    console.log('Course deleted successfully (Admin SDK):', courseId);
+    revalidatePath('/admin/courses');
+    revalidatePath('/'); // Also revalidate home page if courses are listed there
+    // We might need to revalidate specific course paths if they could be cached, e.g., /courses/[id]
+    // For now, revalidating the list pages.
+    return { success: true, message: 'Course deleted successfully.' };
+  } catch (error: any) {
+    console.error('Error deleting course (Admin SDK):', error);
+    let detail = '';
+    if (error.message) {
+      detail = ` Details: ${error.message}`;
+    } else if (error.code) {
+      detail = ` Code: ${error.code}`;
+    } else {
+      detail = ` Details: ${String(error)}`;
+    }
+    return {
+      success: false,
+      message: `Failed to delete course.${detail}`,
+    };
+  }
 }

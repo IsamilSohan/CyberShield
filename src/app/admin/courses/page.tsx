@@ -1,32 +1,40 @@
 
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, Edit, PlusCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Course } from '@/lib/types';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
+import { CourseActions } from '@/components/admin/CourseActions'; // Import the new component
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
-  const coursesCol = collection(db, 'courses');
-  const q = query(coursesCol);
-  const courseSnapshot = await getDocs(q);
-  const coursesList = courseSnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      title: data.title || 'Untitled Course',
-      description: data.description || '',
-      longDescription: data.longDescription || '',
-      imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-      imageHint: data.imageHint || 'education technology',
-      videoUrl: data.videoUrl || '',
-      prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
-      quizId: data.quizId || '',
-    } as Course;
-  });
-  return coursesList;
+  if (!adminDb) {
+    console.error("AdminCoursesPage: Firebase Admin SDK not initialized. Courses cannot be fetched.");
+    throw new Error("Admin SDK not initialized, cannot fetch courses.");
+  }
+  try {
+    const coursesCol = adminDb.collection('courses');
+    const courseSnapshot = await coursesCol.orderBy('title').get(); // Optionally order by title
+    const coursesList = courseSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title || 'Untitled Course',
+        description: data.description || '',
+        longDescription: data.longDescription || '',
+        imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+        imageHint: data.imageHint || 'education technology',
+        videoUrl: data.videoUrl || '',
+        prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
+        quizId: data.quizId || '',
+      } as Course;
+    });
+    return coursesList;
+  } catch (error) {
+    console.error("Error fetching courses from Firestore (Admin SDK):", error);
+    throw error;
+  }
 }
 
 export default async function AdminCoursesPage() {
@@ -35,9 +43,13 @@ export default async function AdminCoursesPage() {
 
   try {
     courses = await getCoursesFromFirestore();
-  } catch (e) {
-    console.error("Failed to fetch courses from Firestore:", e);
-    error = "Failed to load courses. Please ensure Firebase is configured correctly and you have a 'courses' collection.";
+  } catch (e: any) {
+    console.error("Failed to fetch courses for AdminCoursesPage:", e.message);
+    if (e.message.includes("Admin SDK not initialized")) {
+      error = "Server configuration error: Unable to connect to the database to fetch courses. (Admin SDK not initialized)";
+    } else {
+      error = `Failed to load courses. Details: ${e.message}`;
+    }
   }
 
   return (
@@ -84,13 +96,8 @@ export default async function AdminCoursesPage() {
                       <TableCell className="font-medium truncate max-w-xs">{course.id}</TableCell>
                       <TableCell>{course.title}</TableCell>
                       <TableCell className="text-center">{course.videoUrl ? 'Yes' : 'No'}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" aria-label={`Edit course ${course.title}`}>
-                           <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="destructive" size="sm" aria-label={`Delete course ${course.title}`}>
-                           <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <TableCell className="text-right">
+                        <CourseActions courseId={course.id} courseTitle={course.title} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -98,7 +105,7 @@ export default async function AdminCoursesPage() {
               </Table>
             </div>
           ) : !error && (
-            <p className="text-muted-foreground">No courses found in Firestore, or Firebase is not configured. Click "Add New Course" to get started.</p>
+            <p className="text-muted-foreground">No courses found in Firestore. Click "Add New Course" to get started.</p>
           )}
         </CardContent>
       </Card>
