@@ -7,7 +7,8 @@ import { redirect } from 'next/navigation';
 import type { Course, Quiz } from '@/lib/types';
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
-import { collection, addDoc as adminAddDoc, doc as adminDoc, deleteDoc as adminDeleteDoc } from 'firebase-admin/firestore'; // Use aliased imports
+// collection and addDoc are used for creating courses/quizzes
+import { collection, addDoc as adminAddDoc } from 'firebase-admin/firestore';
 
 export async function addCourse(data: NewCourseInput) {
   let courseDocId: string | null = null;
@@ -36,8 +37,8 @@ export async function addCourse(data: NewCourseInput) {
     const quizzesCollectionRef = collection(adminDb, 'quizzes');
     const newQuizData: Omit<Quiz, 'id'> = {
       title: `Quiz for ${validatedData.title}`,
-      courseId: '', // Will be updated after course is created, if needed, or use courseDocId if known earlier
-      questions: [ // Add a sample question
+      courseId: '', // Will be updated after course is created, if needed
+      questions: [
         {
           id: 'sample_q1',
           questionText: 'What is the capital of France?',
@@ -50,9 +51,9 @@ export async function addCourse(data: NewCourseInput) {
           options: ['Earth', 'Mars', 'Jupiter', 'Saturn'],
           correctOptionIndex: 1,
         }
-      ], 
+      ],
     };
-    const quizDocRef = await adminAddDoc(quizzesCollectionRef, newQuizData as any); // Use adminAddDoc
+    const quizDocRef = await adminAddDoc(quizzesCollectionRef, newQuizData as any);
     quizDocId = quizDocRef.id;
     console.log('Quiz created with ID (Admin SDK): ', quizDocId);
 
@@ -65,17 +66,17 @@ export async function addCourse(data: NewCourseInput) {
       imageHint: validatedData.imageHint || 'education technology',
       videoUrl: validatedData.videoUrl || '',
       prerequisites: prerequisitesArray,
-      quizId: quizDocId, // Link to the newly created quiz
+      quizId: quizDocId,
     };
 
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
     const coursesCollectionRef = collection(adminDb, 'courses');
-    const courseDocRef = await adminAddDoc(coursesCollectionRef, newCourseData as any); // Use adminAddDoc
+    const courseDocRef = await adminAddDoc(coursesCollectionRef, newCourseData as any);
     courseDocId = courseDocRef.id;
     console.log('Course added with ID (Admin SDK): ', courseDocId);
 
-    // Optionally, update the quiz document with the courseId if needed for back-reference
-    // await adminDb.collection('quizzes').doc(quizDocId).update({ courseId: courseDocId });
+    // Update the quiz document with the courseId for back-reference
+    await adminDb.collection('quizzes').doc(quizDocId).update({ courseId: courseDocId });
 
 
   } catch (error: any) {
@@ -118,8 +119,11 @@ export async function addCourse(data: NewCourseInput) {
       revalidatePath(`/courses/${courseDocId}`);
       revalidatePath('/');
       console.log('Paths revalidated successfully for course ID:', courseDocId);
-    } catch (revalidationError: any) {
+    } catch (revalidationError: any)
+{
       console.warn(`Warning: Course ${courseDocId} added to DB, but path revalidation failed:`, revalidationError);
+      // Do not treat revalidation error as a failure to add the course for the client
+      // Redirect will still happen.
     }
   }
   
@@ -141,20 +145,21 @@ export async function deleteCourse(courseId: string) {
   }
 
   try {
-    // Optionally, delete the associated quiz if it's tightly coupled
-    const courseDocRef = adminDoc(adminDb, 'courses', courseId); // Use adminDoc
-    const courseSnap = await courseDocRef.get();
+    const courseRef = adminDb.collection('courses').doc(courseId);
+    const courseSnap = await courseRef.get();
+
     if (courseSnap.exists()) {
       const courseData = courseSnap.data() as Course;
       if (courseData.quizId) {
         console.log('Attempting to delete associated quiz with ID (Admin SDK):', courseData.quizId);
-        await adminDeleteDoc(adminDoc(adminDb, 'quizzes', courseData.quizId)); // Use adminDeleteDoc & adminDoc
+        await adminDb.collection('quizzes').doc(courseData.quizId).delete();
         console.log('Associated quiz deleted successfully (Admin SDK):', courseData.quizId);
       }
     }
 
-    await adminDeleteDoc(courseDocRef); // Use adminDeleteDoc
+    await courseRef.delete();
     console.log('Course deleted successfully (Admin SDK):', courseId);
+
     revalidatePath('/admin/courses');
     revalidatePath('/'); 
     return { success: true, message: 'Course and associated quiz deleted successfully.' };
