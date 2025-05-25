@@ -1,5 +1,5 @@
 
-"use client"; // Needs to be client for potential form interactions later
+"use client"; 
 
 import Link from 'next/link';
 import { ArrowLeft, Edit3, Save, Loader2, AlertTriangle } from 'lucide-react';
@@ -12,29 +12,27 @@ import { Separator } from '@/components/ui/separator';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase'; // Using client-side db
+import { doc, getDoc, updateDoc, writeBatch, collection } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase'; 
 import type { Course, Quiz, QuizQuestion } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
-// Helper to generate unique IDs for new questions/options
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 export default function EditCoursePage() {
   const params = useParams<{ courseId: string }>();
-  const courseId = params.courseId;
+  const courseIdFromParams = params.courseId; // Renamed to avoid conflict with quiz.courseId
   const router = useRouter();
   const { toast } = useToast();
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [quiz, setQuiz] = useState<Quiz | null>(null); // Local state for quiz being edited
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state for course details
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDescription, setCourseDescription] = useState('');
   const [courseLongDescription, setCourseLongDescription] = useState('');
@@ -49,14 +47,14 @@ export default function EditCoursePage() {
       if (user) {
         setCurrentUser(user);
       } else {
-        router.push(`/auth/login?redirect=/admin/courses/${courseId}/edit`);
+        router.push(`/auth/login?redirect=/admin/courses/${courseIdFromParams}/edit`);
       }
     });
     return () => unsubscribe();
-  }, [router, courseId]);
+  }, [router, courseIdFromParams]);
   
   useEffect(() => {
-    if (!courseId || !currentUser) { 
+    if (!courseIdFromParams || !currentUser) { 
       setIsLoading(currentUser ? true : false);
       return;
     }
@@ -65,7 +63,7 @@ export default function EditCoursePage() {
 
     const fetchCourseAndQuiz = async () => {
       try {
-        const courseRef = doc(db, 'courses', courseId as string);
+        const courseRef = doc(db, 'courses', courseIdFromParams as string);
         const courseSnap = await getDoc(courseRef);
 
         if (!courseSnap.exists()) {
@@ -79,7 +77,7 @@ export default function EditCoursePage() {
         const fetchedCourseData = courseSnap.data();
         const fetchedCourse = { id: courseSnap.id, ...fetchedCourseData } as Course;
         setCourse(fetchedCourse);
-        // Set form fields
+        
         setCourseTitle(fetchedCourse.title);
         setCourseDescription(fetchedCourse.description);
         setCourseLongDescription(fetchedCourse.longDescription || '');
@@ -94,17 +92,17 @@ export default function EditCoursePage() {
 
 
         if (fetchedCourse.quizId) {
-          const quizRef = doc(db, 'quizzes', fetchedCourse.quizId);
-          const quizSnap = await getDoc(quizRef);
+          const quizRefDoc = doc(db, 'quizzes', fetchedCourse.quizId);
+          const quizSnap = await getDoc(quizRefDoc);
           if (quizSnap.exists()) {
             setQuiz({ id: quizSnap.id, ...quizSnap.data() } as Quiz);
           } else {
-            console.warn(`Quiz with ID ${fetchedCourse.quizId} not found.`);
-            setQuiz(null);
+            console.warn(`Quiz with ID ${fetchedCourse.quizId} not found. A new one will be created if questions are added and saved.`);
+            setQuiz(null); 
           }
         } else {
-          console.warn("Course has no quizId.");
-          setQuiz(null);
+          console.warn("Course has no quizId. A new one will be created if questions are added and saved.");
+          setQuiz(null); 
         }
 
       } catch (e) {
@@ -119,10 +117,10 @@ export default function EditCoursePage() {
         fetchCourseAndQuiz();
     }
 
-  }, [courseId, currentUser]);
+  }, [courseIdFromParams, currentUser]);
 
   const handleQuizQuestionChange = (qIndex: number, field: keyof QuizQuestion, value: string | string[] | number) => {
-    if (!quiz) return;
+    if (!quiz) return; 
     const updatedQuestions = [...quiz.questions];
     if (field === 'options' && Array.isArray(value)) {
        updatedQuestions[qIndex] = { ...updatedQuestions[qIndex], [field]: value };
@@ -144,27 +142,15 @@ export default function EditCoursePage() {
   };
 
   const addQuizQuestion = () => {
-    if (!quiz) { // Initialize a new quiz structure if it's null
-      const newInitialQuiz: Quiz = {
-        id: course?.quizId || `newquiz_${courseId}`, // Use existing quizId or generate one
-        title: `Quiz for ${courseTitle || 'New Course'}`,
-        courseId: courseId,
-        questions: [],
-      };
-      setQuiz(newInitialQuiz); // Set the new quiz, then add a question to it.
-      // Fall through to add the question to the newly initialized quiz.
-    }
-
-    // Ensure quiz is not null before proceeding
     setQuiz(prevQuiz => {
-        const currentQuiz = prevQuiz || { // Default to a new quiz structure if somehow still null
-             id: course?.quizId || `newquiz_${courseId}`,
+        const currentQuiz = prevQuiz || {
+             id: course?.quizId || `newquiz_${courseIdFromParams}`, 
              title: `Quiz for ${courseTitle || 'New Course'}`,
-             courseId: courseId,
+             courseId: courseIdFromParams,
              questions: [],
         };
         const newQuestion: QuizQuestion = {
-          id: generateId(),
+          id: generateId(), 
           questionText: 'New Question',
           options: ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
           correctOptionIndex: 0,
@@ -187,10 +173,9 @@ export default function EditCoursePage() {
     setIsSaving(true);
     try {
       const batch = writeBatch(db);
-
-      // 1. Update Course Document
       const courseRef = doc(db, 'courses', course.id);
-      const updatedCourseData: Partial<Course> = {
+
+      const courseUpdates: Partial<Course> = {
         title: courseTitle,
         description: courseDescription,
         longDescription: courseLongDescription,
@@ -199,24 +184,27 @@ export default function EditCoursePage() {
         videoUrl: courseVideoUrl,
         prerequisites: coursePrerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0),
       };
-      batch.update(courseRef, updatedCourseData);
 
-      // 2. Update Quiz Document (if quiz exists and has a valid quizId)
-      if (quiz && quiz.id && course.quizId) { // Ensure quiz.id is valid
-        const quizRef = doc(db, 'quizzes', course.quizId);
-        const updatedQuizData: Partial<Quiz> = {
-            ...quiz, // Includes id, questions
-            title: `Quiz for ${courseTitle}`, // Keep quiz title in sync
-            courseId: course.id, // Ensure courseId is set
+      if (quiz) { 
+        let finalQuizId = course.quizId; 
+
+        if (!finalQuizId) { 
+          const newQuizDocRef = doc(collection(db, 'quizzes')); 
+          finalQuizId = newQuizDocRef.id;
+          courseUpdates.quizId = finalQuizId; 
+        }
+        
+        const quizRef = doc(db, 'quizzes', finalQuizId);
+        const quizDataToSave: Quiz = {
+          ...quiz, 
+          id: finalQuizId, 
+          title: `Quiz for ${courseTitle}`, 
+          courseId: course.id, 
         };
-        batch.update(quizRef, updatedQuizData);
-      } else if (quiz && !course.quizId) {
-        // This case should ideally not happen if addCourse always creates a quizId.
-        // Handle creation of a new quiz if one was modified but not yet linked/saved.
-        // This would require using addDoc for the quiz then updating the course with the new quizId.
-        // For now, this path assumes quizId exists if quiz object is populated from DB.
-        console.warn("Trying to save quiz changes but course has no quizId or quiz object has no id.");
+        batch.set(quizRef, quizDataToSave, { merge: true }); 
       }
+      
+      batch.update(courseRef, courseUpdates); 
       
       await batch.commit();
       toast({ title: "Success", description: "Course and quiz updated successfully!" });
@@ -241,7 +229,7 @@ export default function EditCoursePage() {
 
   if (error) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 md:p-8">
         <Link href="/admin/courses" className="inline-flex items-center text-primary hover:underline">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Course Management
@@ -260,12 +248,20 @@ export default function EditCoursePage() {
   }
 
   if (!course) {
-    return <p>Course could not be loaded.</p>;
+     return (
+      <div className="space-y-6 p-4 md:p-8">
+         <Link href="/admin/courses" className="inline-flex items-center text-primary hover:underline">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Course Management
+        </Link>
+        <p className="text-center text-destructive">Course could not be loaded.</p>
+      </div>
+    );
   }
 
 
   return (
-    <div className="space-y-8 mb-12">
+    <div className="space-y-8 mb-12 p-4 md:p-0">
       <Link href="/admin/courses" className="inline-flex items-center text-primary hover:underline">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Course Management
@@ -280,7 +276,6 @@ export default function EditCoursePage() {
           <CardDescription>Modify the course details and its associated quiz questions.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Course Details Form Part */}
           <div className="space-y-4 p-4 border rounded-md">
             <h3 className="text-lg font-semibold">Course Information</h3>
             <div>
@@ -315,9 +310,8 @@ export default function EditCoursePage() {
 
           <Separator />
 
-          {/* Quiz Questions Editor Part */}
           <div className="space-y-4 p-4 border rounded-md">
-            <h3 className="text-lg font-semibold">Quiz Questions ({quiz?.title || 'No Quiz Linked'})</h3>
+            <h3 className="text-lg font-semibold">Quiz Questions ({quiz?.title || (course.quizId ? 'Quiz Linked (loading/no questions)' : 'No Quiz Linked')})</h3>
             {quiz && quiz.questions && quiz.questions.length > 0 ? (
               quiz.questions.map((q, qIndex) => (
                 <Card key={q.id || qIndex} className="p-4 space-y-3 bg-muted/50">
@@ -355,12 +349,12 @@ export default function EditCoursePage() {
               ))
             ) : (
               <p className="text-muted-foreground">
-                {course.quizId ? 'No questions in this quiz yet, or quiz data could not be loaded.' : 'This course does not have a quiz linked yet.'}
+                {course.quizId && !quiz ? 'Loading quiz or no questions yet...' : 'No quiz linked or no questions added yet.'}
               </p>
             )}
-            {/* Always show Add Question button if a course exists, to allow creating/adding to a quiz */}
             <Button onClick={addQuizQuestion}>Add Question</Button>
-             {!quiz && course.quizId && <p className="text-destructive">Quiz (ID: {course.quizId}) linked but not found. It might have been deleted.</p>}
+             {course.quizId && !quiz && <p className="text-sm text-destructive mt-2">Info: This course has a quiz ID ({course.quizId}) linked, but the quiz document might be missing or empty. Adding questions will create/update it.</p>}
+             {!course.quizId && <p className="text-sm text-muted-foreground mt-2">Info: This course does not have a quiz linked yet. Adding questions will create a new quiz and link it.</p>}
           </div>
           
           <div className="flex justify-end pt-6">
@@ -375,3 +369,5 @@ export default function EditCoursePage() {
     </div>
   );
 }
+
+    
