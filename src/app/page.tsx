@@ -1,8 +1,10 @@
 
+'use client';
+
 import { CourseCard } from '@/components/courses/CourseCard';
 import { APP_NAME } from '@/lib/constants';
 import type { Course } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase'; // Updated import from firebase-client.ts to firebase.ts
 import { collection, getDocs, query as firestoreQuery } from 'firebase/firestore';
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
@@ -19,9 +21,9 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
         longDescription: data.longDescription || '',
         imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
         imageHint: data.imageHint || 'education technology',
-        videoUrl: data.videoUrl || '', // Added videoUrl
-        prerequisites: data.prerequisites || [],
-        quizId: data.quizId || '', // Added quizId
+        videoUrl: data.videoUrl || '',
+        prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
+        quizId: data.quizId || '',
       } as Course;
     });
     return coursesList;

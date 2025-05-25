@@ -1,12 +1,9 @@
 
 // Import the functions you need from the SDKs you need
-import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getAnalytics, type Analytics } from "firebase/analytics";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getAuth, type Auth } from "firebase/auth"; // Added Auth import
-
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { getAuth } from "firebase/auth"; // Import getAuth
+import { getFirestore } from "firebase/firestore"; // Import getFirestore
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -21,16 +18,25 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app: FirebaseApp = initializeApp(firebaseConfig);
-let analytics: Analytics | undefined;
-if (typeof window !== 'undefined') {
-  // analytics = getAnalytics(app); // Temporarily comment out if causing issues in some environments
+let app;
+let analytics;
+let auth;
+let db;
+
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApp(); // Get the default app if already initialized
 }
 
-// Initialize Firestore
-const db: Firestore = getFirestore(app);
+// Ensure services are initialized only once per app instance
+try {
+    analytics = getAnalytics(app);
+} catch (e) {
+    console.warn("Firebase Analytics could not be initialized (already initialized or other issue):", e);
+}
+auth = getAuth(app);
+db = getFirestore(app);
 
-// Initialize Firebase Auth
-const auth: Auth = getAuth(app);
 
-export { app, analytics, db, auth }; // Exported auth
+export { app, analytics, auth, db }; // Export app, analytics, auth, and db
