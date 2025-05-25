@@ -76,7 +76,8 @@ export default function EditCoursePage() {
           return;
         }
         
-        const fetchedCourse = { id: courseSnap.id, ...courseSnap.data() } as Course;
+        const fetchedCourseData = courseSnap.data();
+        const fetchedCourse = { id: courseSnap.id, ...fetchedCourseData } as Course;
         setCourse(fetchedCourse);
         // Set form fields
         setCourseTitle(fetchedCourse.title);
@@ -85,7 +86,11 @@ export default function EditCoursePage() {
         setCourseImageUrl(fetchedCourse.imageUrl);
         setCourseImageHint(fetchedCourse.imageHint || '');
         setCourseVideoUrl(fetchedCourse.videoUrl || '');
-        setCoursePrerequisites(fetchedCourse.prerequisites?.join(', ') || '');
+        setCoursePrerequisites(
+          Array.isArray(fetchedCourse.prerequisites) 
+            ? fetchedCourse.prerequisites.join(', ') 
+            : ''
+        );
 
 
         if (fetchedCourse.quizId) {
