@@ -41,6 +41,7 @@ export default function EditCoursePage() {
   const [courseLongDescription, setCourseLongDescription] = useState('');
   const [courseImageUrl, setCourseImageUrl] = useState('');
   const [courseImageHint, setCourseImageHint] = useState('');
+  const [courseVideoUrl, setCourseVideoUrl] = useState(''); // For single course video (if needed)
   const [coursePrerequisites, setCoursePrerequisites] = useState('');
 
   // Modules state
@@ -90,7 +91,7 @@ export default function EditCoursePage() {
           ...fetchedCourseData,
           modules: (fetchedCourseData.modules || []).map((m: any) => ({
             ...m,
-            contentBlocks: m.contentBlocks || [] 
+            contentBlocks: m.contentBlocks || []
           }))
         } as Course;
         setCourse(fetchedCourse);
@@ -100,10 +101,11 @@ export default function EditCoursePage() {
         setCourseLongDescription(fetchedCourse.longDescription || '');
         setCourseImageUrl(fetchedCourse.imageUrl);
         setCourseImageHint(fetchedCourse.imageHint || '');
+        setCourseVideoUrl(fetchedCourse.videoUrl || ''); // Handle if single video per course structure
         setCoursePrerequisites(
           Array.isArray(fetchedCourse.prerequisites)
             ? fetchedCourse.prerequisites.join(', ')
-            : (fetchedCourse.prerequisites as string || '') // Handle if it's already a string
+            : (fetchedCourse.prerequisites as string || '')
         );
         setCourseModules(fetchedCourse.modules ? fetchedCourse.modules.sort((a, b) => a.order - b.order) : []);
 
@@ -130,7 +132,7 @@ export default function EditCoursePage() {
       title: newModuleTitle.trim(),
       order: courseModules.length > 0 ? Math.max(...courseModules.map(m => m.order)) + 1 : 1,
       contentBlocks: [],
-      quizId: undefined,
+      // quizId is intentionally left undefined here; linked separately
     };
     setCourseModules(prevModules => [...prevModules, newModule].sort((a, b) => a.order - b.order));
     setNewModuleTitle('');
@@ -158,13 +160,21 @@ export default function EditCoursePage() {
       toast({ title: "Content Value Required", description: "Please enter content/URL for the block.", variant: "destructive" });
       return;
     }
-    const newBlock: ContentBlock = {
+
+    const blockData: Partial<ContentBlock> = { // Use Partial to build
       id: generateId(),
       type: newContentBlockType,
       value: newContentBlockValue.trim(),
       order: (courseModules.find(m => m.id === moduleId)?.contentBlocks.length || 0) + 1,
-      imageHint: newContentBlockType === 'image' ? newContentBlockImageHint.trim() : undefined,
     };
+
+    if (newContentBlockType === 'image' && newContentBlockImageHint.trim()) {
+      blockData.imageHint = newContentBlockImageHint.trim();
+    }
+    
+    const newBlock = blockData as ContentBlock;
+
+
     setCourseModules(prevModules =>
       prevModules.map(module =>
         module.id === moduleId
@@ -173,7 +183,7 @@ export default function EditCoursePage() {
       )
     );
     setNewContentBlockValue('');
-    setNewContentBlockImageHint('');
+    setNewContentBlockImageHint(''); // Reset hint
     toast({ title: "Content Block Added Locally", description: "Save changes to persist." });
   };
 
@@ -191,7 +201,7 @@ export default function EditCoursePage() {
     );
     toast({ title: "Content Block Removed Locally", description: "Save changes to persist." });
   };
-  
+
   const handleLinkOrCreateQuizForModule = async (moduleId: string) => {
     if (!course) return;
     const moduleIndex = courseModules.findIndex(m => m.id === moduleId);
@@ -203,14 +213,14 @@ export default function EditCoursePage() {
         let newQuizData: Quiz | null = null;
 
         if (!quizIdToLink) {
-            quizIdToLink = generateId(); 
+            quizIdToLink = generateId();
             newQuizData = {
                 id: quizIdToLink,
                 title: `Quiz for ${courseModules[moduleIndex].title}`,
                 courseId: course.id,
                 moduleId: moduleId,
                 questions: [
-                    { id: generateId(), questionText: "Sample Question 1: What is ...?", options: ["Option A", "Option B", "Option C"], correctAnswerIndex: 0 }
+                    { id: generateId(), questionText: "Sample Question 1: What is ...?", options: ["Option A", "Option B", "Option C"], correctAnswerIndex: 0, explanation: "This is a sample explanation." }
                 ],
             };
         }
@@ -218,18 +228,18 @@ export default function EditCoursePage() {
         const updatedModules = courseModules.map(m =>
             m.id === moduleId ? { ...m, quizId: quizIdToLink } : m
         );
-        setCourseModules(updatedModules); // Update local state first
+        setCourseModules(updatedModules);
 
         const batch = writeBatch(db);
         const courseRef = doc(db, 'courses', course.id);
-        
+
         batch.update(courseRef, { modules: updatedModules });
 
         if (newQuizData) {
             const quizRef = doc(db, 'quizzes', quizIdToLink);
-            batch.set(quizRef, newQuizData); 
+            batch.set(quizRef, newQuizData);
         }
-        
+
         await batch.commit();
 
         if (newQuizData) {
@@ -237,9 +247,9 @@ export default function EditCoursePage() {
         } else {
           toast({ title: "Quiz Linked", description: `Quiz ID ${quizIdToLink} ensured for "${courseModules[moduleIndex].title}".` });
         }
-        // Navigate to the new quiz editing page
-        router.push(`/admin/quizzes/${quizIdToLink}/edit?courseId=${course.id}`);
-        
+        // Do not automatically navigate, let user click edit quiz button
+        // router.push(`/admin/quizzes/${quizIdToLink}/edit?courseId=${course.id}`);
+
     } catch (e: any) {
         console.error("Error linking/creating module quiz:", e);
         toast({ title: "Quiz Error", description: `Failed to link/create module quiz. ${e.message}`, variant: "destructive" });
@@ -251,7 +261,7 @@ export default function EditCoursePage() {
   const handleUnlinkQuizFromModule = (moduleId: string) => {
      setCourseModules(prevModules =>
             prevModules.map(m =>
-                m.id === moduleId ? { ...m, quizId: undefined } : m
+                m.id === moduleId ? { ...m, quizId: undefined } : m // Set to undefined to be omitted on save
             )
         );
      toast({ title: "Quiz Unlinked Locally", description: "Save all course changes to persist this." });
@@ -267,24 +277,41 @@ export default function EditCoursePage() {
     const batch = writeBatch(db);
     try {
       const courseRef = doc(db, 'courses', course.id);
-      
+
       const courseUpdates: Partial<Course> = {
         title: courseTitle,
         description: courseDescription,
-        longDescription: courseLongDescription,
-        imageUrl: courseImageUrl,
-        imageHint: courseImageHint,
+        longDescription: courseLongDescription || '', // Ensure empty strings not undefined
+        imageUrl: courseImageUrl || `https://placehold.co/600x400.png`, // Default if empty
+        imageHint: courseImageHint || 'education technology', // Default if empty
+        videoUrl: courseVideoUrl || '', // For single course video
         prerequisites: coursePrerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0),
-        modules: courseModules.map((mod, index) => ({ 
-            id: mod.id,
-            title: mod.title,
-            order: index + 1, 
-            contentBlocks: (mod.contentBlocks || []).map((cb, cbIndex) => ({...cb, order: cbIndex + 1})),
-            quizId: mod.quizId
-        })),
+        modules: courseModules.map((mod, index) => {
+            const moduleToSave: any = { // Use 'any' temporarily to build the object
+                id: mod.id,
+                title: mod.title,
+                order: index + 1,
+                contentBlocks: (mod.contentBlocks || []).map((cb, cbIndex) => {
+                    const blockToSave: any = {
+                        id: cb.id,
+                        type: cb.type,
+                        value: cb.value,
+                        order: cbIndex + 1,
+                    };
+                    if (cb.imageHint && cb.imageHint.trim()) { // Only include if it's a non-empty string
+                        blockToSave.imageHint = cb.imageHint.trim();
+                    }
+                    return blockToSave as ContentBlock;
+                }),
+            };
+            if (mod.quizId && mod.quizId.trim()) { // Only include if it's a non-empty string
+                moduleToSave.quizId = mod.quizId;
+            }
+            return moduleToSave as Module;
+        }),
       };
       batch.update(courseRef, courseUpdates as Record<string, any>);
-      
+
       await batch.commit();
       toast({ title: "Success", description: "Course updated successfully!" });
       router.push('/admin/courses');
@@ -359,6 +386,7 @@ export default function EditCoursePage() {
             <div><Label htmlFor="courseLongDescription">Long Description</Label><Textarea id="courseLongDescription" value={courseLongDescription} onChange={(e) => setCourseLongDescription(e.target.value)} className="min-h-[100px]" /></div>
             <div><Label htmlFor="courseImageUrl">Image URL</Label><Input id="courseImageUrl" value={courseImageUrl} onChange={(e) => setCourseImageUrl(e.target.value)} /></div>
             <div><Label htmlFor="courseImageHint">Image Hint</Label><Input id="courseImageHint" value={courseImageHint} onChange={(e) => setCourseImageHint(e.target.value)} /></div>
+            <div><Label htmlFor="courseVideoUrl">Main Course Video URL (Optional)</Label><Input id="courseVideoUrl" value={courseVideoUrl} onChange={(e) => setCourseVideoUrl(e.target.value)} /></div>
             <div><Label htmlFor="coursePrerequisites">Prerequisites (comma-separated)</Label><Input id="coursePrerequisites" value={coursePrerequisites} onChange={(e) => setCoursePrerequisites(e.target.value)} /></div>
           </div>
 
@@ -375,12 +403,12 @@ export default function EditCoursePage() {
                         <GripVertical className="h-5 w-5 mr-2 text-muted-foreground flex-shrink-0" />
                         Module {mod.order}: <Input value={mod.title} onChange={(e) => handleModuleTitleChange(mod.id, e.target.value)} className="ml-2 flex-grow min-w-[200px]" onClick={(e) => e.stopPropagation()} />
                        </div>
-                       <Button
+                        <Button
                           asChild
                           variant="destructive"
                           size="icon"
                           onClick={(e) => {
-                            e.stopPropagation(); 
+                            e.stopPropagation();
                             handleRemoveModule(mod.id);
                           }}
                           aria-label={`Remove module ${mod.title}`}
@@ -449,7 +477,7 @@ export default function EditCoursePage() {
                             </div>
                         ) : (
                             <Button onClick={() => handleLinkOrCreateQuizForModule(mod.id)} size="sm" disabled={isSaving}>
-                                {isSaving && courseModules.find(m => m.id === mod.id && m.quizId === undefined)?.id  ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                                {isSaving && courseModules.find(m => m.id === mod.id && !m.quizId) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                                 Create & Link Quiz
                             </Button>
                         )}
@@ -485,3 +513,4 @@ export default function EditCoursePage() {
     </div>
   );
 }
+
