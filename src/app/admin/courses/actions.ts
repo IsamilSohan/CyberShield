@@ -66,7 +66,7 @@ export async function addCourse(data: NewCourseInput) {
       imageHint: validatedData.imageHint || 'education technology',
       videoUrl: validatedData.videoUrl || '',
       prerequisites: prerequisitesArray,
-      quizId: quizDocId,
+      quizId: quizDocId, // Link the newly created quiz
     };
 
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
@@ -148,9 +148,9 @@ export async function deleteCourse(courseId: string) {
     const courseRef = adminDb.collection('courses').doc(courseId);
     const courseSnap = await courseRef.get();
 
-    if (courseSnap.exists()) {
-      const courseData = courseSnap.data() as Course;
-      if (courseData.quizId) {
+    if (courseSnap.exists) { // Changed from courseSnap.exists()
+      const courseData = courseSnap.data() as Course; // data() is a function
+      if (courseData && courseData.quizId) {
         console.log('Attempting to delete associated quiz with ID (Admin SDK):', courseData.quizId);
         await adminDb.collection('quizzes').doc(courseData.quizId).delete();
         console.log('Associated quiz deleted successfully (Admin SDK):', courseData.quizId);
