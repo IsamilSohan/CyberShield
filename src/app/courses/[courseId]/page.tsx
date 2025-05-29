@@ -6,40 +6,39 @@ import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, Loader2, BookOpen, MessageSquare, StarIcon } from 'lucide-react';
+import { ArrowLeft, Info, Loader2, BookOpen, MessageSquare, StarIcon, PlayCircle, ListChecks } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import type { Course, Module, Review } from '@/lib/types';
+import type { Course, Review } from '@/lib/types';
 import { doc, getDoc, collection, query, where, getDocs, orderBy as firestoreOrderBy } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { AddReviewForm } from '@/components/reviews/AddReviewForm';
 import { format } from 'date-fns';
-import { VideoPlayer } from '@/components/courses/VideoPlayer'; // Keep for modules
+import { VideoPlayer } from '@/components/courses/VideoPlayer';
 
 export default function CourseDetailPage() {
   const router = useRouter();
-  const paramsHook = useParams<{ courseId: string }>();
-  const courseId = paramsHook.courseId;
+  const paramsHook = useParams();
+  const courseId = paramsHook.courseId as string; // Ensure courseId is a string
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [course, setCourse] = useState<Course | null | undefined>(undefined);
+  const [course, setCourse] = useState<Course | null | undefined>(undefined); // undefined for initial loading state
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
 
-
   const fetchCourseAndReviews = useCallback(async () => {
     if (!courseId) {
       setIsLoadingPage(false);
-      setCourse(null);
+      setCourse(null); // Explicitly set to null if no courseId
       return;
     }
     setIsLoadingPage(true);
     setIsLoadingReviews(true);
     try {
-      const courseRef = doc(db, "courses", courseId as string);
+      const courseRef = doc(db, "courses", courseId);
       const courseSnap = await getDoc(courseRef);
       if (courseSnap.exists()) {
         const data = courseSnap.data();
@@ -48,15 +47,18 @@ export default function CourseDetailPage() {
           title: data.title || 'Untitled Course',
           description: data.description || '',
           longDescription: data.longDescription || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/1200x500.png',
+          imageUrl: data.imageUrl || 'https://placehold.co/800x400.png', // Default size
           imageHint: data.imageHint || 'education technology',
           prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
-          modules: Array.isArray(data.modules) ? data.modules.sort((a: Module, b: Module) => a.order - b.order) : [],
+          modules: Array.isArray(data.modules) ? data.modules.sort((a, b) => a.order - b.order) : [],
+          // videoUrl: data.videoUrl || '', // This was for the old single video model
+          // quizId: data.quizId || '', // This was for the old single quiz model
         } as Course);
       } else {
-        setCourse(null);
+        setCourse(null); // Course not found
       }
 
+      // Fetch reviews
       const reviewsQuery = query(
         collection(db, "reviews"),
         where("courseId", "==", courseId),
@@ -82,16 +84,22 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user); 
+      setCurrentUser(user);
       if (!user) {
-        // If course access strictly requires login, redirect here.
-        // For now, allow viewing course, but review form will be disabled.
-        // router.push('/auth/login?redirect=/courses/' + courseId);
+        router.push(`/auth/login?redirect=/courses/${courseId}`);
+      } else {
+         fetchCourseAndReviews(); // Fetch data only if user is logged in
       }
     });
-    fetchCourseAndReviews(); // Initial fetch
+     // Initial fetch if user might already be logged in (or if page is public for some parts)
+    if (auth.currentUser) {
+        fetchCourseAndReviews();
+    } else if (!courseId) { // Handle case where courseId might not be available initially
+        setIsLoadingPage(false);
+        setCourse(null);
+    }
     return () => unsubscribe();
-  }, [courseId, fetchCourseAndReviews]);
+  }, [courseId, router, fetchCourseAndReviews]);
 
 
   if (isLoadingPage || course === undefined) {
@@ -124,47 +132,59 @@ export default function CourseDetailPage() {
         Back to Courses
       </Link>
 
-      {/* Main Course Info Card - Image, Title, Description, Long Desc, Prerequisites */}
-      <Card className="shadow-xl overflow-hidden"> {/* overflow-hidden for rounded image corners */}
+      {/* Course Title - Prominent and Separate */}
+      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{course.title}</h1>
+
+      {/* Image and Subheader Card */}
+      <Card className="shadow-xl overflow-hidden">
         <div className="relative">
           <Image
             src={course.imageUrl}
             alt={course.title}
-            width={1200} // Increased width
-            height={500} // Increased height for a more banner-like feel
-            className="w-full h-auto object-cover" // Removed rounded-t-lg if card is overflow-hidden
+            width={800} 
+            height={400} 
+            className="w-full h-auto object-cover"
             data-ai-hint={course.imageHint || "education learning"}
-            priority // Prioritize loading the main course image
+            priority 
           />
         </div>
-        <CardHeader className="pt-6"> {/* Added pt-6 for spacing after image */}
-          <CardTitle className="text-3xl sm:text-4xl font-bold mb-2">{course.title}</CardTitle>
-          {course.description && ( // This is the "subheader"
-            <CardDescription className="text-lg text-muted-foreground">
-              {course.description}
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent>
-          {course.longDescription && (
-            <div className="prose dark:prose-invert max-w-none mb-6">
-              <p>{course.longDescription}</p>
-            </div>
-          )}
-          {course.prerequisites && course.prerequisites.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-md font-semibold mb-2 flex items-center">
-                <Info className="w-5 h-5 mr-2 text-primary"/>Prerequisites:
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {course.prerequisites.map((prereq, index) => (
-                  <Badge key={index} variant="secondary">{prereq}</Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
+        {course.description && (
+            <CardContent className="pt-4"> {/* Using CardContent for subheader */}
+                <p className="text-lg text-muted-foreground">{course.description}</p>
+            </CardContent>
+        )}
       </Card>
+
+      {/* Long Description Section */}
+      {course.longDescription && (
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle>About this course</CardTitle>
+          </CardHeader>
+          <CardContent className="prose dark:prose-invert max-w-none">
+            <p>{course.longDescription}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Prerequisites Section */}
+      {course.prerequisites && course.prerequisites.length > 0 && (
+        <Card className="shadow-md">
+          <CardHeader>
+             <CardTitle className="flex items-center">
+                <Info className="w-5 h-5 mr-2 text-primary"/>Prerequisites
+             </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {course.prerequisites.map((prereq, index) => (
+                <Badge key={index} variant="secondary">{prereq}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
@@ -184,7 +204,7 @@ export default function CourseDetailPage() {
                     <li key={module.id}>
                       <Button variant="outline" asChild className="w-full justify-start text-left h-auto py-3">
                         <Link href={`/courses/${course.id}/modules/${module.id}`}>
-                          <BookOpen className="mr-3 h-5 w-5 text-primary/80" />
+                          <PlayCircle className="mr-3 h-5 w-5 text-primary/80" />
                           <div>
                             <span className="font-medium">Module {module.order}: {module.title}</span>
                           </div>
@@ -273,4 +293,3 @@ export default function CourseDetailPage() {
     </div>
   );
 }
-
