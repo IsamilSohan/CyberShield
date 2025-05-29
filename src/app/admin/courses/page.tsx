@@ -4,19 +4,16 @@ import { ArrowLeft, BookOpen, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Course } from '@/lib/types';
+import type { Course, Module } from '@/lib/types';
 import { adminDb } from '@/lib/firebase-admin';
-import { CourseActions } from '@/components/admin/CourseActions'; 
-// Removed client-side Firestore imports: collection, getDocs, orderBy, query as firestoreQuery
+import { CourseActions } from '@/components/admin/CourseActions';
 
 async function getCoursesFromFirestore(): Promise<Course[]> {
   if (!adminDb) {
     console.error("AdminCoursesPage: Firebase Admin SDK not initialized. Courses cannot be fetched.");
-    // Consider re-throwing or returning a specific error object
     throw new Error("Admin SDK not initialized, cannot fetch courses.");
   }
   try {
-    // Use Admin SDK's query methods directly
     const courseSnapshot = await adminDb.collection('courses').orderBy('title').get();
     const coursesList = courseSnapshot.docs.map(doc => {
       const data = doc.data();
@@ -27,9 +24,16 @@ async function getCoursesFromFirestore(): Promise<Course[]> {
         longDescription: data.longDescription || '',
         imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
         imageHint: data.imageHint || 'education technology',
-        videoUrl: data.videoUrl || '',
         prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
-        quizId: data.quizId || '', 
+        modules: Array.isArray(data.modules) 
+          ? data.modules.map((m: any) => ({
+              id: m.id || '',
+              title: m.title || 'Untitled Module',
+              order: typeof m.order === 'number' ? m.order : 0,
+              contentBlocks: Array.isArray(m.contentBlocks) ? m.contentBlocks : [],
+              quizId: m.quizId || undefined,
+            } as Module))
+          : [],
       } as Course;
     });
     return coursesList;
@@ -91,8 +95,7 @@ export default async function AdminCoursesPage() {
                   <TableRow>
                     <TableHead className="w-[150px] hidden sm:table-cell">ID</TableHead>{/*
                     */}<TableHead>Title</TableHead>{/*
-                    */}<TableHead className="hidden md:table-cell text-center">Has Video?</TableHead>{/*
-                    */}<TableHead className="hidden lg:table-cell text-center">Has Quiz?</TableHead>{/*
+                    */}<TableHead className="hidden md:table-cell text-center">Modules</TableHead>{/*
                     */}<TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -101,8 +104,7 @@ export default async function AdminCoursesPage() {
                     <TableRow key={course.id}>
                       <TableCell className="font-medium truncate max-w-xs hidden sm:table-cell">{course.id}</TableCell>
                       <TableCell>{course.title}</TableCell>
-                      <TableCell className="hidden md:table-cell text-center">{course.videoUrl ? 'Yes' : 'No'}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-center">{course.quizId ? 'Yes' : 'No'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-center">{course.modules?.length || 0}</TableCell>
                       <TableCell className="text-right">
                         <CourseActions courseId={course.id} courseTitle={course.title} />
                       </TableCell>
