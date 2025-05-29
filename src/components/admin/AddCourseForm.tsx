@@ -36,40 +36,37 @@ export function AddCourseForm() {
       imageUrl: "",
       imageHint: "education technology",
       prerequisites: "",
-      // videoUrl: "", // Removed
     },
   });
 
   async function onSubmit(values: NewCourseInput) {
     setIsSubmitting(true);
-    try {
-      const result = await addCourse(values);
+    
+    // Call the server action.
+    // If addCourse throws (e.g., for a redirect), Next.js should handle it.
+    // If it returns an object, it's an error object we defined.
+    const result = await addCourse(values);
 
-      if (result?.success === false) {
-        toast({
-          title: "Error Adding Course",
-          description: result.message || "An unexpected error occurred.",
-          variant: "destructive",
-        });
-        if (result.errors) {
-          Object.entries(result.errors).forEach(([field, messages]) => {
-            if (messages && messages.length > 0) {
-              form.setError(field as keyof NewCourseInput, { type: "manual", message: messages.join(", ") });
-            }
-          });
-        }
-      }
-      // Successful redirect is handled by the server action.
-    } catch (error) {
-      console.error("Form submission error:", error);
+    // Only process 'result' if it's an error object returned from the server action
+    if (result && result.success === false) {
       toast({
-        title: "Submission Error",
-        description: "An unexpected error occurred during submission. Check console.",
+        title: "Error Adding Course",
+        description: result.message || "An unexpected error occurred.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
+      if (result.errors) {
+        Object.entries(result.errors).forEach(([field, messages]) => {
+          if (messages && messages.length > 0) {
+            form.setError(field as keyof NewCourseInput, { type: "manual", message: messages.join(", ") });
+          }
+        });
+      }
     }
+    // If addCourse was successful and initiated a redirect,
+    // this part of the code might not even be reached, or 'result' would not be an error object.
+    // No explicit success toast here as redirect is the success indicator.
+
+    setIsSubmitting(false); // Set to false regardless of outcome, redirect will navigate away
   }
 
   return (
@@ -150,27 +147,7 @@ export function AddCourseForm() {
             </FormItem>
           )}
         />
-
-        {/* Course Video URL field removed */}
-        {/*
-        <FormField
-          control={form.control}
-          name="videoUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Course Video URL (Optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="https://www.youtube.com/watch?v=..." {...field} />
-              </FormControl>
-               <FormDescription>
-                Paste the full YouTube (or other video platform) URL for the main course video.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        */}
-
+        
         <FormField
           control={form.control}
           name="prerequisites"
@@ -189,7 +166,7 @@ export function AddCourseForm() {
         />
 
         <div className="flex justify-end gap-4 pt-4">
-            <Button type="button" variant="outline" onClick={() => router.back()}>
+            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
                 Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
