@@ -2,27 +2,30 @@
 import { z } from 'zod';
 
 export interface User {
-  id: string; 
+  id: string;
   name: string;
   email: string;
-  isAdmin?: boolean; // Added isAdmin field
-  enrolledCourses: string[]; 
-  certificates: Certificate[];
+  isAdmin?: boolean;
+  enrolledCourses: string[];
+  certificates: Certificate[]; // Certificates are still course-level for now
 }
 
-export interface QuizQuestion {
-  id: string;
-  questionText: string;
-  options: string[]; 
-  correctOptionIndex: number; 
-}
-
-export interface Quiz {
-  id: string;
+// Simplified Module for Phase 1: Just ID, title, and order. Content and quiz linking later.
+export interface Module {
+  id: string; // Unique identifier for the module (e.g., generated string)
   title: string;
-  courseId: string; 
-  questions: QuizQuestion[];
+  order: number; // For sequencing within the course
+  // quizId?: string; // Will be added in a later phase for module-specific quizzes
+  // contentBlocks?: ContentBlock[]; // For text/image/video, to be added in a later phase
 }
+
+// export interface ContentBlock {
+//   id: string;
+//   type: 'text' | 'image' | 'video';
+//   value: string; // Text content or URL for image/video
+//   imageHint?: string; // For AI hint if type is image
+//   order: number;
+// }
 
 export interface Course {
   id: string;
@@ -31,19 +34,20 @@ export interface Course {
   longDescription?: string;
   imageUrl: string;
   imageHint?: string;
-  videoUrl?: string; 
   prerequisites?: string[];
-  quizId: string; 
+  modules: Module[]; // Array of modules
+  // videoUrl?: string; // Removed, video content will be in modules
+  // quizId?: string; // Removed, quizzes will be per module
 }
 
 export interface Certificate {
-  id: string; 
+  id: string;
   courseId: string;
-  courseTitle: string; 
+  courseTitle: string;
   userId: string;
   userName: string;
-  issueDate: string; 
-  certificateUrl?: string; 
+  issueDate: string;
+  certificateUrl?: string;
 }
 
 export const NewCourseSchema = z.object({
@@ -52,10 +56,8 @@ export const NewCourseSchema = z.object({
   longDescription: z.string().optional(),
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().max(30, "Image hint should be concise (max 30 chars).").optional(),
-  videoUrl: z.string().url({ message: "Video URL must be a valid URL if provided." }).or(z.literal('')).optional(),
-  prerequisites: z.string().optional(), 
+  prerequisites: z.string().optional(),
+  // videoUrl: z.string().url({ message: "Video URL must be a valid URL if provided." }).or(z.literal('')).optional(), // Removed
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
-
-    

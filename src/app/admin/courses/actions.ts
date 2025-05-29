@@ -4,15 +4,13 @@
 import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course, Quiz } from '@/lib/types';
+import type { Course } from '@/lib/types'; // Quiz type removed for now
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
-// collection and addDoc are used for creating courses/quizzes
 import { collection, addDoc as adminAddDoc } from 'firebase-admin/firestore';
 
 export async function addCourse(data: NewCourseInput) {
   let courseDocId: string | null = null;
-  let quizDocId: string | null = null;
 
   if (!adminDb) {
     console.error('Error adding course: Firebase Admin SDK is not initialized. Ensure FIREBASE_SERVICE_ACCOUNT_KEY_JSON is set and valid, and the server was restarted.');
@@ -33,83 +31,56 @@ export async function addCourse(data: NewCourseInput) {
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
 
-    // 1. Create the Quiz document first
-    const quizzesCollectionRef = collection(adminDb, 'quizzes');
-    const newQuizData: Omit<Quiz, 'id'> = {
-      title: `Quiz for ${validatedData.title}`,
-      courseId: '', // Will be updated after course is created, if needed
-      questions: [
-        {
-          id: 'sample_q1',
-          questionText: 'What is the capital of France?',
-          options: ['Berlin', 'Madrid', 'Paris', 'Rome'],
-          correctOptionIndex: 2,
-        },
-        {
-          id: 'sample_q2',
-          questionText: 'Which planet is known as the Red Planet?',
-          options: ['Earth', 'Mars', 'Jupiter', 'Saturn'],
-          correctOptionIndex: 1,
-        }
-      ],
-    };
-    const quizDocRef = await adminAddDoc(quizzesCollectionRef, newQuizData as any);
-    quizDocId = quizDocRef.id;
-    console.log('Quiz created with ID (Admin SDK): ', quizDocId);
-
-    // 2. Create the Course document, linking the quizId
+    // Create the Course document
     const newCourseData: Omit<Course, 'id'> = {
       title: validatedData.title,
       description: validatedData.description,
       longDescription: validatedData.longDescription || '',
       imageUrl: finalImageUrl,
       imageHint: validatedData.imageHint || 'education technology',
-      videoUrl: validatedData.videoUrl || '',
       prerequisites: prerequisitesArray,
-      quizId: quizDocId, // Link the newly created quiz
+      modules: [], // Initialize with an empty modules array
+      // videoUrl: validatedData.videoUrl || '', // Removed
+      // quizId: '', // Removed course-level quizId
     };
 
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
     const coursesCollectionRef = collection(adminDb, 'courses');
-    const courseDocRef = await adminAddDoc(coursesCollectionRef, newCourseData as any);
+    const courseDocRef = await adminAddDoc(coursesCollectionRef, newCourseData as any); // Type assertion for Omit<Course,'id'>
     courseDocId = courseDocRef.id;
     console.log('Course added with ID (Admin SDK): ', courseDocId);
 
-    // Update the quiz document with the courseId for back-reference
-    await adminDb.collection('quizzes').doc(quizDocId).update({ courseId: courseDocId });
-
-
   } catch (error: any) {
-    console.error('Error during course/quiz data processing or Firestore write: ', error);
+    console.error('Error during course data processing or Firestore write: ', error);
     if (error instanceof z.ZodError) {
       const fieldErrors = error.flatten().fieldErrors;
       const formErrors = error.flatten().formErrors;
       let customMessage = 'Validation failed. Please check your inputs.';
-      
+
       if (formErrors.length > 0) {
         customMessage = formErrors.join(' ');
       } else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
           customMessage = 'Some fields have validation errors. Please review them.';
       }
-      
+
       return {
         success: false,
         message: customMessage,
         errors: fieldErrors as Record<string, string[]>,
       };
     }
-    
+
     let detail = '';
     if (error.message) {
       detail = ` Details: ${error.message}`;
-    } else if (error.code) { 
+    } else if (error.code) {
       detail = ` Code: ${error.code}`;
     } else {
       detail = ` Details: ${String(error)}`;
     }
     return {
       success: false,
-      message: `Failed to add course/quiz to database.${detail}`,
+      message: `Failed to add course to database.${detail}`,
     };
   }
 
@@ -119,15 +90,12 @@ export async function addCourse(data: NewCourseInput) {
       revalidatePath(`/courses/${courseDocId}`);
       revalidatePath('/');
       console.log('Paths revalidated successfully for course ID:', courseDocId);
-    } catch (revalidationError: any)
-{
+    } catch (revalidationError: any) {
       console.warn(`Warning: Course ${courseDocId} added to DB, but path revalidation failed:`, revalidationError);
-      // Do not treat revalidation error as a failure to add the course for the client
-      // Redirect will still happen.
     }
   }
-  
-  redirect('/admin/courses'); 
+
+  redirect('/admin/courses');
 }
 
 export async function deleteCourse(courseId: string) {
@@ -148,23 +116,30 @@ export async function deleteCourse(courseId: string) {
     const courseRef = adminDb.collection('courses').doc(courseId);
     const courseSnap = await courseRef.get();
 
-    if (courseSnap.exists) { // Changed from courseSnap.exists()
-      const courseData = courseSnap.data() as Course; // data() is a function
+    if (courseSnap.exists) {
+      const courseData = courseSnap.data() as Partial<Course & { quizId?: string }>; // Allow old quizId for cleanup
+      // If old structure course.quizId exists, try to delete it.
+      // New module-specific quizzes will need a different cleanup logic later.
       if (courseData && courseData.quizId) {
-        console.log('Attempting to delete associated quiz with ID (Admin SDK):', courseData.quizId);
-        await adminDb.collection('quizzes').doc(courseData.quizId).delete();
-        console.log('Associated quiz deleted successfully (Admin SDK):', courseData.quizId);
+        console.log('Attempting to delete associated course-level quiz with ID (Admin SDK):', courseData.quizId);
+        try {
+            await adminDb.collection('quizzes').doc(courseData.quizId).delete();
+            console.log('Associated course-level quiz deleted successfully (Admin SDK):', courseData.quizId);
+        } catch (quizDeleteError: any) {
+            console.warn(`Warning: Failed to delete associated course-level quiz ${courseData.quizId}:`, quizDeleteError.message);
+        }
       }
+      // Future: Iterate through courseData.modules and delete their quizId from 'quizzes' if implemented.
     }
 
     await courseRef.delete();
     console.log('Course deleted successfully (Admin SDK):', courseId);
 
     revalidatePath('/admin/courses');
-    revalidatePath('/'); 
-    return { success: true, message: 'Course and associated quiz deleted successfully.' };
+    revalidatePath('/');
+    return { success: true, message: 'Course and any associated old course-level quiz deleted successfully.' };
   } catch (error: any) {
-    console.error('Error deleting course or associated quiz (Admin SDK):', error);
+    console.error('Error deleting course or associated data (Admin SDK):', error);
     let detail = '';
     if (error.message) {
       detail = ` Details: ${error.message}`;

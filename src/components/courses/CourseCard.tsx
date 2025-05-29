@@ -4,14 +4,14 @@ import Image from 'next/image';
 import type { Course } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlayCircle } from 'lucide-react'; // Changed from BookOpen
+import { BookOpen } from 'lucide-react'; // Changed from PlayCircle
 
 interface CourseCardProps {
   course: Course;
 }
 
 export function CourseCard({ course }: CourseCardProps) {
-  // Removed module-specific calculations
+  const moduleCount = course.modules?.length || 0;
 
   return (
     <Card className="flex flex-col h-full overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -33,10 +33,10 @@ export function CourseCard({ course }: CourseCardProps) {
         </Link>
         <CardDescription className="text-sm text-muted-foreground mb-4">{course.description}</CardDescription>
         <div className="flex items-center text-xs text-muted-foreground space-x-4">
-          {course.videoUrl && (
+          {moduleCount > 0 && (
             <div className="flex items-center">
-              <PlayCircle className="w-4 h-4 mr-1" />
-              <span>Course Video</span>
+              <BookOpen className="w-4 h-4 mr-1" />
+              <span>{moduleCount} Module{moduleCount === 1 ? '' : 's'}</span>
             </div>
           )}
         </div>

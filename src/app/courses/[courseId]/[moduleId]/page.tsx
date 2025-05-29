@@ -1,11 +1,10 @@
 
 "use client";
 
-// This page is now largely deprecated due to the simplification of courses
-// to have one video and one quiz at the course level.
-// It's kept for now to avoid breaking any existing direct links, but
-// its functionality is minimal and users should primarily interact
-// with /courses/[courseId].
+// This page is being repurposed or effectively replaced by the new
+// /courses/[courseId]/modules/[moduleId]/page.tsx structure.
+// For now, keeping it simple to show a deprecation message if anyone lands here.
+// It should ideally be removed if all links are updated.
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -17,10 +16,10 @@ import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function DeprecatedModuleDetailPage() {
+export default function OldModuleStructurePage() {
   const router = useRouter();
   const params = useParams<{ courseId: string; moduleId: string }>();
-  const { courseId, moduleId } = params;
+  const { courseId, moduleId: oldModuleId } = params;
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [course, setCourse] = useState<Course | undefined>(undefined);
@@ -45,11 +44,11 @@ export default function DeprecatedModuleDetailPage() {
         }
         fetchCourse();
       } else {
-        router.push(`/auth/login?redirect=/courses/${courseId}/${moduleId}`);
+        router.push(`/auth/login?redirect=/courses/${courseId}/${oldModuleId}`);
       }
     });
     return () => unsubscribe();
-  }, [router, courseId, moduleId]);
+  }, [router, courseId, oldModuleId]);
 
   if (isLoadingPage) {
     return (
@@ -72,18 +71,18 @@ export default function DeprecatedModuleDetailPage() {
         <CardHeader>
           <CardTitle className="flex items-center text-xl text-destructive">
             <FileWarning className="mr-3 h-6 w-6" />
-            Module Content Deprecated
+            Old Module Page
           </CardTitle>
           <CardDescription>
-            This course ({course?.title || 'Unknown Course'}) now has its main video and quiz directly on the course page.
+            The structure for course modules has changed.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            Individual module pages like this one (module: {moduleId}) are no longer in use for this course structure.
+            You've reached an old module link (ID: {oldModuleId}). Courses now use a new module system.
           </p>
           <p className="mt-4">
-            Please navigate to the main course page to view the video content and access the quiz.
+            Please navigate to the main course page to see the updated list of modules.
           </p>
           <Link href={`/courses/${courseId}`} className="text-primary hover:underline mt-2 inline-block">
             Go to Main Course Page

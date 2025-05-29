@@ -35,8 +35,8 @@ export function AddCourseForm() {
       longDescription: "",
       imageUrl: "",
       imageHint: "education technology",
-      videoUrl: "",
       prerequisites: "",
+      // videoUrl: "", // Removed
     },
   });
 
@@ -45,8 +45,6 @@ export function AddCourseForm() {
     try {
       const result = await addCourse(values);
 
-      // If the server action returns a result, it means an error occurred
-      // because a successful action would have redirected.
       if (result?.success === false) {
         toast({
           title: "Error Adding Course",
@@ -61,14 +59,8 @@ export function AddCourseForm() {
           });
         }
       }
-      // If 'addCourse' successfully redirects, this part of the 'try' block
-      // might not be reached, or 'result' would be undefined.
-      // The redirect itself is the primary success indicator.
-      // A success toast is generally not needed here as the user will be navigated away.
-      
+      // Successful redirect is handled by the server action.
     } catch (error) {
-      // This catch block is for client-side errors or if the addCourse promise itself rejects unexpectedly
-      // (e.g., network issue before the server action is fully processed).
       console.error("Form submission error:", error);
       toast({
         title: "Submission Error",
@@ -158,7 +150,9 @@ export function AddCourseForm() {
             </FormItem>
           )}
         />
-        
+
+        {/* Course Video URL field removed */}
+        {/*
         <FormField
           control={form.control}
           name="videoUrl"
@@ -175,6 +169,7 @@ export function AddCourseForm() {
             </FormItem>
           )}
         />
+        */}
 
         <FormField
           control={form.control}
