@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
       {
-        protocol: 'https', // Added entry for https for example.com
+        protocol: 'https',
         hostname: 'example.com',
         port: '',
         pathname: '/**',
@@ -40,7 +40,19 @@ const nextConfig: NextConfig = {
         hostname: 'picsum.photos',
         port: '',
         pathname: '/**',
-      }
+      },
+      { // New entry to allow any HTTPS hostname
+        protocol: 'https',
+        hostname: '**',
+        port: '',
+        pathname: '/**',
+      },
+      { // New entry to allow any HTTP hostname (use with caution)
+        protocol: 'http',
+        hostname: '**',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
