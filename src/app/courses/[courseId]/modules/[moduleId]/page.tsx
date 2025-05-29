@@ -4,13 +4,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, BookOpen } from 'lucide-react';
+import { ArrowLeft, Loader2, BookOpen, FileText, Image as ImageIcon, Video as VideoIcon, ListChecks } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import type { Course, Module } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import Image from 'next/image';
+import { VideoPlayer } from '@/components/courses/VideoPlayer'; // Assuming you have this
+import type { Course, Module as ModuleType, ContentBlock } from '@/lib/types'; // Renamed Module to ModuleType
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-// Placeholder for future content display components (VideoPlayer, ImageDisplay, TextBlock)
 
 export default function ModuleDetailPage() {
   const params = useParams<{ courseId: string; moduleId: string }>();
@@ -19,7 +21,7 @@ export default function ModuleDetailPage() {
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
-  const [module, setModule] = useState<Module | null>(null);
+  const [module, setModule] = useState<ModuleType | null>(null); // Use ModuleType
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +55,16 @@ export default function ModuleDetailPage() {
           setModule(null);
           return;
         }
-        const fetchedCourse = { id: courseSnap.id, ...courseSnap.data() } as Course;
+        const courseData = courseSnap.data() as Course;
+        // Ensure modules and contentBlocks are initialized as arrays
+        const fetchedCourse = { 
+          id: courseSnap.id, 
+          ...courseData,
+          modules: (courseData.modules || []).map(m => ({
+            ...m,
+            contentBlocks: m.contentBlocks || []
+          }))
+        } as Course;
         setCourse(fetchedCourse);
 
         const foundModule = fetchedCourse.modules?.find(m => m.id === moduleId);
@@ -109,6 +120,8 @@ export default function ModuleDetailPage() {
     );
   }
 
+  const sortedContentBlocks = module.contentBlocks?.sort((a,b) => a.order - b.order) || [];
+
   return (
     <div className="space-y-8">
       <Link href={`/courses/${courseId}`} className="inline-flex items-center text-primary hover:underline mb-6">
@@ -124,32 +137,56 @@ export default function ModuleDetailPage() {
           </CardTitle>
           <CardDescription>Course: {course.title}</CardDescription>
         </CardHeader>
-        <CardContent className="prose dark:prose-invert max-w-none">
-          <p className="text-muted-foreground py-8 text-center">
-            Module content (text, images, video) will be displayed here.
-          </p>
-          {/* 
-            Future implementation:
-            Iterate through module.contentBlocks and render based on type.
-            E.g.,
-            module.contentBlocks.map(block => {
-              if (block.type === 'text') return <p key={block.id}>{block.value}</p>;
-              if (block.type === 'image') return <Image key={block.id} src={block.value} alt={block.title || 'Module image'} width={800} height={450} />;
-              if (block.type === 'video') return <VideoPlayer key={block.id} videoUrl={block.value} title={module.title} />;
-            })
-          */}
+        <CardContent className="prose dark:prose-invert max-w-none space-y-6">
+          {sortedContentBlocks.length > 0 ? (
+            sortedContentBlocks.map(block => (
+              <div key={block.id} className="p-4 rounded-md border bg-card/50 shadow-sm">
+                {block.type === 'text' && (
+                  <div className="flex items-start">
+                    <FileText className="h-5 w-5 mr-3 mt-1 text-primary/70 flex-shrink-0" />
+                    <p>{block.value}</p>
+                  </div>
+                )}
+                {block.type === 'image' && (
+                  <div className="flex items-start">
+                    <ImageIcon className="h-5 w-5 mr-3 mt-1 text-primary/70 flex-shrink-0" />
+                    <Image 
+                      src={block.value} 
+                      alt={block.imageHint || `Module image ${block.order}`} 
+                      width={800} 
+                      height={450} 
+                      className="rounded-md object-contain"
+                      data-ai-hint={block.imageHint || "content image"}
+                    />
+                  </div>
+                )}
+                {block.type === 'video' && (
+                  <div className="flex items-start">
+                     <VideoIcon className="h-5 w-5 mr-3 mt-1 text-primary/70 flex-shrink-0" />
+                     <VideoPlayer videoUrl={block.value} title={`Module Video ${block.order}`} />
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="text-muted-foreground py-8 text-center">
+              No content available for this module yet.
+            </p>
+          )}
           
-          {/* Placeholder for Quiz Button */}
-          <div className="mt-8 pt-6 border-t">
-            <h3 className="text-xl font-semibold mb-4">Next Steps</h3>
-            {/* <Button asChild disabled={!module.quizId}>
-              <Link href={`/courses/${courseId}/modules/${moduleId}/assessment`}>
-                Attempt Quiz
-              </Link>
-            </Button>
-            {!module.quizId && <p className="text-sm text-muted-foreground">No quiz associated with this module yet.</p>} */}
-            <p className="text-sm text-muted-foreground">Quiz functionality for modules will be added later.</p>
-          </div>
+          {module.quizId && (
+            <div className="mt-8 pt-6 border-t">
+              <h3 className="text-xl font-semibold mb-4 flex items-center">
+                <ListChecks className="mr-2 h-5 w-5 text-primary"/>
+                Test Your Knowledge
+              </h3>
+              <Button asChild>
+                <Link href={`/courses/${courseId}/modules/${moduleId}/assessment`}>
+                  Attempt Quiz
+                </Link>
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

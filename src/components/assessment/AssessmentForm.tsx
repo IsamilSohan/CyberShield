@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Quiz, QuizQuestion } from "@/lib/types";
+import type { Quiz } from "@/lib/types"; // QuizQuestion is part of Quiz
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 
 interface AssessmentFormProps {
   quiz: Quiz;
-  courseId: string;
+  courseId: string; // Keep courseId for the "Back to Course/Module" link
   onSubmit: (values: Record<string, string>) => Promise<void>;
   isSubmitting: boolean;
 }
@@ -29,7 +29,6 @@ interface AssessmentFormProps {
 export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: AssessmentFormProps) {
   
   const formSchemaObject = quiz.questions.reduce((acc, question) => {
-    // Ensure unique field name for each question
     acc[`question_${question.id}`] = z.string().min(1, { message: "Please select an answer." });
     return acc;
   }, {} as Record<string, z.ZodString>);
@@ -38,13 +37,10 @@ export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: Asses
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    // Initialize defaultValues for each question
     defaultValues: quiz.questions.reduce((acc, q) => ({ ...acc, [`question_${q.id}`]: "" }), {}),
   });
 
   function processSubmit(values: z.infer<typeof formSchema>) {
-    // The values are already in the format Record<string, string> (e.g. { "question_q1": "0", "question_q2": "1" })
-    // where the value is the stringified index of the selected option.
     onSubmit(values);
   }
 
@@ -53,7 +49,7 @@ export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: Asses
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-center">{quiz.title}</CardTitle>
         <CardDescription className="text-center">
-          Test your knowledge. Select one answer for each question.
+          Test your knowledge from module: {quiz.moduleId ? `Module (ID: ${quiz.moduleId.substring(0,6)}...)` : 'General'}. Select one answer for each question.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -63,7 +59,6 @@ export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: Asses
               <FormField
                 key={question.id}
                 control={form.control}
-                // Ensure the name matches the key in formSchemaObject and defaultValues
                 name={`question_${question.id}` as keyof z.infer<typeof formSchema>}
                 render={({ field }) => (
                   <FormItem className="space-y-3 p-4 border rounded-md bg-card shadow">
@@ -79,7 +74,6 @@ export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: Asses
                         {question.options.map((optionText, optionIndex) => (
                           <FormItem key={`${question.id}-opt-${optionIndex}`} className="flex items-center space-x-3 space-y-0 p-2 rounded-md hover:bg-muted/50 transition-colors">
                             <FormControl>
-                              {/* Value will be the index of the option */}
                               <RadioGroupItem value={optionIndex.toString()} id={`${field.name}-opt-${optionIndex}`} />
                             </FormControl>
                             <FormLabel htmlFor={`${field.name}-opt-${optionIndex}`} className="font-normal text-sm cursor-pointer">
@@ -96,7 +90,8 @@ export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: Asses
             ))}
             <div className="flex justify-end gap-4 pt-6">
               <Button type="button" variant="outline" asChild disabled={isSubmitting}>
-                 <Link href={`/courses/${courseId}`}>Back to Course</Link>
+                 {/* Link back to the specific module, or course if moduleId is not available */}
+                 <Link href={quiz.moduleId ? `/courses/${courseId}/modules/${quiz.moduleId}` : `/courses/${courseId}`}>Back to Content</Link>
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -109,3 +104,4 @@ export function AssessmentForm({ quiz, courseId, onSubmit, isSubmitting }: Asses
     </Card>
   );
 }
+

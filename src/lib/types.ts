@@ -6,26 +6,25 @@ export interface User {
   name: string;
   email: string;
   isAdmin?: boolean;
-  enrolledCourses: string[];
-  certificates: Certificate[]; // Certificates are still course-level for now
+  enrolledCourses: string[]; // Array of course IDs
+  certificates: Certificate[];
 }
 
-// Simplified Module for Phase 1: Just ID, title, and order. Content and quiz linking later.
+export interface ContentBlock {
+  id: string; // Unique ID for the content block
+  type: 'text' | 'image' | 'video';
+  value: string; // For text: the actual text. For image/video: the URL.
+  order: number;
+  imageHint?: string; // Optional hint for AI if type is image
+}
+
 export interface Module {
-  id: string; // Unique identifier for the module (e.g., generated string)
+  id: string; // Unique identifier for the module
   title: string;
   order: number; // For sequencing within the course
-  // quizId?: string; // Will be added in a later phase for module-specific quizzes
-  // contentBlocks?: ContentBlock[]; // For text/image/video, to be added in a later phase
+  contentBlocks: ContentBlock[];
+  quizId?: string; // Optional: ID of the quiz associated with this module
 }
-
-// export interface ContentBlock {
-//   id: string;
-//   type: 'text' | 'image' | 'video';
-//   value: string; // Text content or URL for image/video
-//   imageHint?: string; // For AI hint if type is image
-//   order: number;
-// }
 
 export interface Course {
   id: string;
@@ -35,19 +34,34 @@ export interface Course {
   imageUrl: string;
   imageHint?: string;
   prerequisites?: string[];
-  modules: Module[]; // Array of modules
-  // videoUrl?: string; // Removed, video content will be in modules
-  // quizId?: string; // Removed, quizzes will be per module
+  modules: Module[];
+}
+
+export interface QuizQuestion {
+  id: string; // Unique ID for the question
+  questionText: string;
+  options: string[]; // Array of answer options
+  correctAnswerIndex: number; // Index of the correct answer in the options array
+}
+
+export interface Quiz {
+  id:string; // Should match the module.quizId or course.quizId
+  title: string; // e.g., "Quiz for Module 1: Introduction"
+  courseId: string; // To know which course this quiz belongs to
+  moduleId?: string; // To know which module this quiz belongs to (if module-specific)
+  questions: QuizQuestion[];
 }
 
 export interface Certificate {
-  id: string;
+  id: string; // Unique certificate ID
   courseId: string;
-  courseTitle: string;
+  courseTitle: string; // Keep course title on certificate for display
+  // moduleId?: string; // If certificates become module-specific
+  // moduleTitle?: string;
   userId: string;
   userName: string;
-  issueDate: string;
-  certificateUrl?: string;
+  issueDate: string; // ISO date string
+  certificateUrl?: string; // Optional URL to a visual certificate image/pdf
 }
 
 export const NewCourseSchema = z.object({
@@ -55,9 +69,8 @@ export const NewCourseSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters."),
   longDescription: z.string().optional(),
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
-  imageHint: z.string().max(30, "Image hint should be concise (max 30 chars).").optional(),
+  imageHint: z.string().max(50, "Image hint should be concise (max 50 chars).").optional(), // Increased limit slightly
   prerequisites: z.string().optional(),
-  // videoUrl: z.string().url({ message: "Video URL must be a valid URL if provided." }).or(z.literal('')).optional(), // Removed
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
