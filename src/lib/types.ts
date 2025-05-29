@@ -5,6 +5,7 @@ export interface User {
   id: string; 
   name: string;
   email: string;
+  isAdmin?: boolean; // Added isAdmin field
   enrolledCourses: string[]; 
   certificates: Certificate[];
 }
@@ -12,14 +13,14 @@ export interface User {
 export interface QuizQuestion {
   id: string;
   questionText: string;
-  options: string[]; // Array of answer option strings
-  correctOptionIndex: number; // 0-based index of the correct option in the options array
+  options: string[]; 
+  correctOptionIndex: number; 
 }
 
 export interface Quiz {
   id: string;
   title: string;
-  courseId: string; // To link back to the course
+  courseId: string; 
   questions: QuizQuestion[];
 }
 
@@ -32,26 +33,16 @@ export interface Course {
   imageHint?: string;
   videoUrl?: string; 
   prerequisites?: string[];
-  quizId: string; // Non-optional: ID of the quiz document in the 'quizzes' collection
+  quizId: string; 
 }
 
-// Assessment interface might not be directly used if Quiz interface serves the purpose for forms
-// For now, keeping it simple and the AssessmentForm will use the Quiz type.
-// If needed later for storing user attempts, we can expand on this.
-// export interface Assessment {
-//   id: string;
-//   courseId: string; 
-//   questions: AssessmentQuestion[]; // Re-using QuizQuestion for consistency
-// }
-
-
 export interface Certificate {
-  id: string; // Unique ID for the certificate record
+  id: string; 
   courseId: string;
-  courseTitle: string; // Storing title at issuance time
+  courseTitle: string; 
   userId: string;
   userName: string;
-  issueDate: string; // ISO date string
+  issueDate: string; 
   certificateUrl?: string; 
 }
 
@@ -60,9 +51,11 @@ export const NewCourseSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters."),
   longDescription: z.string().optional(),
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
-  imageHint: z.string().optional(),
+  imageHint: z.string().max(30, "Image hint should be concise (max 30 chars).").optional(),
   videoUrl: z.string().url({ message: "Video URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   prerequisites: z.string().optional(), 
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
+
+    

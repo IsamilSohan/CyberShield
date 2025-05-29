@@ -2,18 +2,16 @@
 "use client";
 
 import Link from 'next/link';
-import { LogOut, LogIn, UserCog } from 'lucide-react'; // UserCog for Admin
+import { LogOut, LogIn, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { APP_NAME, NAV_LINKS } from '@/lib/constants';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
-import { auth } from '@/lib/firebase'; // Import Firebase auth
-import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth'; // Import onAuthStateChanged and signOut
-
-// Mock admin state - in a real app, this would come from user roles/permissions
-// For example, you might fetch user data from Firestore and check an 'isAdmin' field.
-const MOCK_IS_ADMIN = true; 
+import { auth, db } from '@/lib/firebase'; // Import Firebase auth and db
+import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
+import type { User } from '@/lib/types'; // Import User type
 
 export function Header() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -22,13 +20,24 @@ export function Header() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        // In a real app, you would fetch user roles here from Firestore
-        // For now, we'll use a mock value if a user is logged in.
-        // Example: fetch user doc from Firestore users/{user.uid} and check an isAdmin field
-        setIsAdmin(MOCK_IS_ADMIN); // This should be replaced with actual role checking
+        // Fetch user document from Firestore to check isAdmin status
+        try {
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data() as User; // Cast to your User type
+            setIsAdmin(userData.isAdmin === true); // Check for isAdmin field
+          } else {
+            console.warn("User document not found in Firestore for UID:", user.uid);
+            setIsAdmin(false);
+          }
+        } catch (error) {
+          console.error("Error fetching user document for admin check:", error);
+          setIsAdmin(false);
+        }
       } else {
         setIsAdmin(false);
       }
@@ -39,10 +48,10 @@ export function Header() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setIsAdmin(false); // Reset admin status on logout
       router.push('/auth/login'); // Redirect to login after logout
     } catch (error) {
       console.error("Logout error:", error);
-      // Handle logout error if needed
     }
   };
   
@@ -53,15 +62,16 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <span className="h-8 w-8 text-primary">
-            <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 1024 1024" // Removed pt units, viewBox is unitless
-              preserveAspectRatio="xMidYMid meet"
-              className="h-full w-full" // Ensure SVG fills the span
-              fill="currentColor" // Inherit color from parent's text-primary
-            >
+          <svg
+            version="1.0"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 1024 1024"
+            preserveAspectRatio="xMidYMid meet"
+            className="h-full w-full"
+            fill="currentColor"
+          >
               <g transform="translate(0,1024) scale(0.1,-0.1)"
                 stroke="none"
-                // Removed fill="#000000" from here to allow currentColor to work
               >
                 <path d="M2525 7088 c-62 -36 -438 -193 -635 -265 -188 -68 -437 -132 -722
 -184 -192 -35 -190 -29 -189 -503 1 -886 170 -1438 590 -1930 144 -169 400
@@ -215,7 +225,6 @@ l-189 0 0 -516z m476 298 c105 -54 160 -200 135 -354 -29 -177 -116 -252 -305
                 pathname === link.href ? "text-primary" : "text-foreground/70"
               )}
             >
-              {/* Special case for Admin link to use UserCog icon */}
               {link.label === "Admin" && link.adminRequired && isAuthenticated && isAdmin ? (
                 <>
                   <UserCog className="mr-1 h-4 w-4 inline-block" /> {link.label}
@@ -244,3 +253,5 @@ l-189 0 0 -516z m476 298 c105 -54 160 -200 135 -354 -29 -177 -116 -252 -305
     </header>
   );
 }
+
+    
