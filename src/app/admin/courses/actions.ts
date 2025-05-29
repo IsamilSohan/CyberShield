@@ -4,10 +4,10 @@
 import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { Course } from '@/lib/types'; // Quiz type removed for now
+import type { Course, Module } from '@/lib/types';
 import { NewCourseSchema, type NewCourseInput } from '@/lib/types';
 import { z } from 'zod';
-import { collection, addDoc as adminAddDoc } from 'firebase-admin/firestore';
+// Removed: import { collection, addDoc as adminAddDoc } from 'firebase-admin/firestore';
 
 export async function addCourse(data: NewCourseInput) {
   let courseDocId: string | null = null;
@@ -30,8 +30,20 @@ export async function addCourse(data: NewCourseInput) {
     const prerequisitesArray = validatedData.prerequisites
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
+    
+    const initialModules: Module[] = [];
+    // if (validatedData.initialModuleTitle && validatedData.initialModuleVideoUrl) {
+    //   initialModules.push({
+    //     id: Math.random().toString(36).substring(2, 15), // Simple unique ID
+    //     title: validatedData.initialModuleTitle,
+    //     videoUrl: validatedData.initialModuleVideoUrl,
+    //     transcript: '', // Initialize as empty
+    //     duration: '',   // Initialize as empty
+    //     order: 1
+    //   });
+    // }
 
-    // Create the Course document
+
     const newCourseData: Omit<Course, 'id'> = {
       title: validatedData.title,
       description: validatedData.description,
@@ -39,14 +51,13 @@ export async function addCourse(data: NewCourseInput) {
       imageUrl: finalImageUrl,
       imageHint: validatedData.imageHint || 'education technology',
       prerequisites: prerequisitesArray,
-      modules: [], // Initialize with an empty modules array
+      modules: [], // Initialize with an empty modules array, modules are added via edit page
       // videoUrl: validatedData.videoUrl || '', // Removed
-      // quizId: '', // Removed course-level quizId
+      // quizId: '', // Removed
     };
 
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
-    const coursesCollectionRef = collection(adminDb, 'courses');
-    const courseDocRef = await adminAddDoc(coursesCollectionRef, newCourseData as any); // Type assertion for Omit<Course,'id'>
+    const courseDocRef = await adminDb.collection('courses').add(newCourseData as any); // Use direct adminDb method
     courseDocId = courseDocRef.id;
     console.log('Course added with ID (Admin SDK): ', courseDocId);
 
@@ -62,6 +73,11 @@ export async function addCourse(data: NewCourseInput) {
       } else if (Object.keys(fieldErrors).length > 0 && customMessage === 'Validation failed. Please check your inputs.') {
           customMessage = 'Some fields have validation errors. Please review them.';
       }
+      // Specific check for module title/URL pairing if it was a Zod refine error
+      if (formErrors.some(fe => fe.includes("initial module title"))) {
+        customMessage = "If providing an initial module title, you must also provide a video URL (and vice-versa), or leave both blank.";
+      }
+
 
       return {
         success: false,
@@ -84,6 +100,8 @@ export async function addCourse(data: NewCourseInput) {
     };
   }
 
+  // If we reach here, the course was added to the DB
+  // Now attempt revalidation and then redirect.
   if (courseDocId) {
     try {
       revalidatePath('/admin/courses');
@@ -91,11 +109,19 @@ export async function addCourse(data: NewCourseInput) {
       revalidatePath('/');
       console.log('Paths revalidated successfully for course ID:', courseDocId);
     } catch (revalidationError: any) {
+      // Log a warning, but don't let revalidation failure prevent the redirect
+      // if the main DB operation was successful.
       console.warn(`Warning: Course ${courseDocId} added to DB, but path revalidation failed:`, revalidationError);
     }
+    redirect('/admin/courses'); // Redirect after successful DB add and revalidation attempt
+  } else {
+    // This case should ideally not be reached if courseDocId is null and no error was thrown before.
+    // But as a fallback, return an error.
+    return {
+      success: false,
+      message: 'Failed to add course: No course ID was generated after database operation.',
+    };
   }
-
-  redirect('/admin/courses');
 }
 
 export async function deleteCourse(courseId: string) {
@@ -116,20 +142,19 @@ export async function deleteCourse(courseId: string) {
     const courseRef = adminDb.collection('courses').doc(courseId);
     const courseSnap = await courseRef.get();
 
-    if (courseSnap.exists) {
-      const courseData = courseSnap.data() as Partial<Course & { quizId?: string }>; // Allow old quizId for cleanup
-      // If old structure course.quizId exists, try to delete it.
-      // New module-specific quizzes will need a different cleanup logic later.
+    if (courseSnap.exists) { // Corrected: .exists is a property, not a function
+      const courseData = courseSnap.data() as Partial<Course & { quizId?: string }>;
+      
+      // Delete associated quiz if it exists (from old structure)
       if (courseData && courseData.quizId) {
-        console.log('Attempting to delete associated course-level quiz with ID (Admin SDK):', courseData.quizId);
+        console.log('Attempting to delete associated quiz with ID (Admin SDK):', courseData.quizId);
         try {
             await adminDb.collection('quizzes').doc(courseData.quizId).delete();
-            console.log('Associated course-level quiz deleted successfully (Admin SDK):', courseData.quizId);
+            console.log('Associated quiz deleted successfully (Admin SDK):', courseData.quizId);
         } catch (quizDeleteError: any) {
-            console.warn(`Warning: Failed to delete associated course-level quiz ${courseData.quizId}:`, quizDeleteError.message);
+            console.warn(`Warning: Failed to delete associated quiz ${courseData.quizId}:`, quizDeleteError.message);
         }
       }
-      // Future: Iterate through courseData.modules and delete their quizId from 'quizzes' if implemented.
     }
 
     await courseRef.delete();
@@ -137,7 +162,7 @@ export async function deleteCourse(courseId: string) {
 
     revalidatePath('/admin/courses');
     revalidatePath('/');
-    return { success: true, message: 'Course and any associated old course-level quiz deleted successfully.' };
+    return { success: true, message: 'Course and any associated quiz deleted successfully.' };
   } catch (error: any) {
     console.error('Error deleting course or associated data (Admin SDK):', error);
     let detail = '';
