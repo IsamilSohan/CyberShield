@@ -45,17 +45,17 @@ export interface QuizQuestion {
 }
 
 export interface Quiz {
-  id: string; 
-  title: string; 
-  courseId: string; 
-  moduleId?: string; 
+  id: string;
+  title: string;
+  courseId: string;
+  moduleId?: string;
   questions: QuizQuestion[];
 }
 
 export interface Certificate {
   id: string; // Unique certificate ID
   courseId: string;
-  courseTitle: string; 
+  courseTitle: string;
   userId: string;
   userName: string;
   issueDate: string; // ISO date string
@@ -69,14 +69,27 @@ export const NewCourseSchema = z.object({
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
   imageHint: z.string().max(50, "Image hint should be concise (max 50 chars).").optional(),
   prerequisites: z.string().optional(),
-})
-.refine(data => {
-    // This refinement is somewhat redundant now that module title/URL are removed from initial creation
-    // but kept for potential future complex validations.
-    return true; 
-}, {
-  message: "Validation logic placeholder for NewCourseSchema.", // Generic message
-  path: [], // No specific path, applies to the whole object
 });
-
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
+
+
+// --- Blog Post Types ---
+export interface BlogPost {
+  id: string;
+  title: string; // Header
+  subHeader?: string; // Optional sub-header
+  content: string; // Main content (can be markdown or HTML string)
+  imageUrl: string; // Main picture URL
+  imageHint?: string; // Optional AI hint for the main picture
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+}
+
+export const NewBlogPostSchema = z.object({
+  title: z.string().min(5, "Title must be at least 5 characters.").max(200, "Title must be 200 characters or less."),
+  subHeader: z.string().max(300, "Sub-header must be 300 characters or less.").optional(),
+  content: z.string().min(50, "Content must be at least 50 characters."),
+  imageUrl: z.string().url({ message: "Image URL must be a valid URL." }).or(z.literal('')).optional(),
+  imageHint: z.string().max(50, "Image hint should be concise (max 50 chars).").optional(),
+});
+export type NewBlogPostInput = z.infer<typeof NewBlogPostSchema>;

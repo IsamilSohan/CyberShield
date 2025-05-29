@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShieldAlert, Users, BookOpen, Settings } from 'lucide-react';
+import { ShieldAlert, Users, BookOpen, Settings, Newspaper } from 'lucide-react'; // Added Newspaper icon
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -45,6 +45,23 @@ export default function AdminPage() {
           <CardContent>
             <Button variant="outline" asChild className="mt-4 w-full">
               <Link href="/admin/courses">Manage Courses</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Newspaper className="mr-2 h-5 w-5 text-primary" /> {/* Changed icon */}
+              Blog Management
+            </CardTitle>
+            <CardDescription>
+              Create, edit, and manage blog posts.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" asChild className="mt-4 w-full">
+              <Link href="/admin/blog">Manage Blog Posts</Link>
             </Button>
           </CardContent>
         </Card>
