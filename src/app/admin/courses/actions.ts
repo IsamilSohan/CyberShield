@@ -32,6 +32,7 @@ export async function addCourse(data: NewCourseInput) {
       ? validatedData.prerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0)
       : [];
 
+    // Courses are now created with an empty modules array. Modules are added via edit page.
     const newCourseData: Omit<Course, 'id'> = {
       title: validatedData.title,
       description: validatedData.description,
@@ -39,11 +40,11 @@ export async function addCourse(data: NewCourseInput) {
       imageUrl: finalImageUrl,
       imageHint: validatedData.imageHint || 'education technology',
       prerequisites: prerequisitesArray,
-      modules: [], // Modules are managed on the edit page
+      modules: [], // Initialize with empty modules
     };
 
     console.log('Attempting to add course with data (Admin SDK):', newCourseData);
-    const courseDocRef = await adminDb.collection('courses').add(newCourseData as any);
+    const courseDocRef = await adminDb.collection('courses').add(newCourseData as any); // Use .add() for auto-generated ID
     courseDocId = courseDocRef.id;
     console.log('Course added with ID (Admin SDK): ', courseDocId);
 
@@ -83,20 +84,24 @@ export async function addCourse(data: NewCourseInput) {
   if (courseDocId) {
     try {
       revalidatePath('/admin/courses');
-      revalidatePath(`/courses/${courseDocId}`);
-      revalidatePath('/');
+      revalidatePath(`/courses/${courseDocId}`); // Revalidate specific course page
+      revalidatePath('/'); // Revalidate homepage if courses are listed there
       console.log('Paths revalidated successfully for course ID:', courseDocId);
     } catch (revalidationError: any) {
+      // Log a warning, but don't treat it as a fatal error for the course creation itself
       console.warn(`Warning: Course ${courseDocId} added to DB, but path revalidation failed:`, revalidationError);
     }
-    redirect('/admin/courses');
+    redirect('/admin/courses'); // Redirect to courses list page
   } else {
+    // This case should ideally not be reached if addDoc throws an error or successfully returns a ref.
+    // But as a fallback:
     return {
       success: false,
       message: 'Failed to add course: No course ID was generated after database operation.',
     };
   }
 }
+
 
 export async function deleteCourse(courseId: string) {
   console.log('Attempting to delete course with ID (Admin SDK):', courseId);
@@ -112,13 +117,14 @@ export async function deleteCourse(courseId: string) {
     return { success: false, message: 'Course ID is required for deletion.' };
   }
 
-  try {
-    const courseRef = adminDb.collection('courses').doc(courseId);
-    const courseSnap = await courseRef.get();
-    const batch = adminDb.batch();
+  const batch = adminDb.batch();
+  const courseRef = adminDb.collection('courses').doc(courseId);
 
+  try {
+    const courseSnap = await courseRef.get();
     if (courseSnap.exists) {
       const courseData = courseSnap.data() as Course;
+
       // Delete associated module quizzes
       if (courseData.modules && courseData.modules.length > 0) {
         for (const module of courseData.modules) {
@@ -129,20 +135,33 @@ export async function deleteCourse(courseId: string) {
           }
         }
       }
+      
+      // Delete reviews associated with the course
+      const reviewsQuery = adminDb.collection('reviews').where('courseId', '==', courseId);
+      const reviewsSnapshot = await reviewsQuery.get();
+      if (!reviewsSnapshot.empty) {
+        console.log(`Found ${reviewsSnapshot.size} reviews to delete for course ${courseId}`);
+        reviewsSnapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+      }
+
       // Delete the course itself
       batch.delete(courseRef);
       await batch.commit();
-      console.log('Course and any associated module quizzes deleted successfully (Admin SDK):', courseId);
+      console.log('Course, associated module quizzes, and reviews deleted successfully (Admin SDK):', courseId);
     } else {
       console.log('Course not found for deletion (Admin SDK):', courseId);
       return { success: false, message: 'Course not found for deletion.' };
     }
 
-
     revalidatePath('/admin/courses');
     revalidatePath('/');
-    return { success: true, message: 'Course and any associated module quizzes deleted successfully.' };
-  } catch (error: any) {
+    revalidatePath(`/courses/${courseId}`); // Revalidate specific course page
+    return { success: true, message: 'Course and associated data deleted successfully.' };
+
+  } catch (error: any)
+{
     console.error('Error deleting course or associated data (Admin SDK):', error);
     let detail = '';
     if (error.message) {

@@ -1,73 +1,100 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-// VideoPlayer removed as videos are now per module
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, Loader2, BookOpen, ListChecks } from 'lucide-react'; // PlayCircle removed, BookOpen/ListChecks added
+import { ArrowLeft, Info, Loader2, BookOpen, ListChecks, MessageSquare, StarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import type { Course, Module } from '@/lib/types';
-import { doc, getDoc } from 'firebase/firestore';
+import type { Course, Module, Review } from '@/lib/types';
+import { doc, getDoc, collection, query, where, getDocs, orderBy as firestoreOrderBy } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { AddReviewForm } from '@/components/reviews/AddReviewForm';
+import { format } from 'date-fns';
+
 
 export default function CourseDetailPage() {
   const router = useRouter();
-  const params = useParams<{ courseId: string }>();
-  const courseId = params.courseId;
+  const paramsHook = useParams<{ courseId: string }>();
+  const courseId = paramsHook.courseId;
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [course, setCourse] = useState<Course | null | undefined>(undefined);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
+
+  const fetchCourseAndReviews = useCallback(async () => {
+    if (!courseId) {
+      setIsLoadingPage(false);
+      setCourse(null);
+      return;
+    }
+    setIsLoadingPage(true);
+    setIsLoadingReviews(true);
+    try {
+      // Fetch course
+      const courseRef = doc(db, "courses", courseId as string);
+      const courseSnap = await getDoc(courseRef);
+      if (courseSnap.exists()) {
+        const data = courseSnap.data();
+        setCourse({
+          id: courseSnap.id,
+          title: data.title || 'Untitled Course',
+          description: data.description || '',
+          longDescription: data.longDescription || '',
+          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          imageHint: data.imageHint || 'education technology',
+          prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
+          modules: Array.isArray(data.modules) ? data.modules.sort((a: Module, b: Module) => a.order - b.order) : [],
+        } as Course);
+      } else {
+        setCourse(null);
+      }
+
+      // Fetch reviews
+      const reviewsQuery = query(
+        collection(db, "reviews"),
+        where("courseId", "==", courseId),
+        firestoreOrderBy("createdAt", "desc")
+      );
+      const reviewsSnapshot = await getDocs(reviewsQuery);
+      const fetchedReviews = reviewsSnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+        createdAt: docSnap.data().createdAt?.toDate ? format(docSnap.data().createdAt.toDate(), 'PPP p') : 'Date unknown',
+      } as Review));
+      setReviews(fetchedReviews);
+
+    } catch (error) {
+      console.error("Error fetching course or reviews:", error);
+      setCourse(null);
+      setReviews([]);
+    } finally {
+      setIsLoadingPage(false);
+      setIsLoadingReviews(false);
+    }
+  }, [courseId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user);
-        async function fetchCourseFromDb() {
-          if (!courseId) {
-            setIsLoadingPage(false);
-            setCourse(null);
-            return;
-          }
-          try {
-            const courseRef = doc(db, "courses", courseId as string);
-            const courseSnap = await getDoc(courseRef);
-            if (courseSnap.exists()) {
-              const data = courseSnap.data();
-              setCourse({
-                id: courseSnap.id,
-                title: data.title || 'Untitled Course',
-                description: data.description || '',
-                longDescription: data.longDescription || '',
-                imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
-                imageHint: data.imageHint || 'education technology',
-                prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
-                modules: Array.isArray(data.modules) ? data.modules.sort((a: Module, b: Module) => a.order - b.order) : [], // Sort modules by order
-                // videoUrl: data.videoUrl || '', // Removed
-                // quizId: data.quizId || '', // Removed
-              } as Course);
-            } else {
-              setCourse(null);
-            }
-          } catch (error) {
-            console.error("Error fetching course:", error);
-            setCourse(null);
-          } finally {
-            setIsLoadingPage(false);
-          }
-        }
-        fetchCourseFromDb();
-      } else {
-        router.push('/auth/login?redirect=/courses/' + courseId);
+      setCurrentUser(user); // Set current user for review form
+      if (!user) {
+        // If course access strictly requires login, redirect here.
+        // For now, allow viewing course, but review form will be disabled.
+        // router.push('/auth/login?redirect=/courses/' + courseId);
       }
     });
+    fetchCourseAndReviews(); // Initial fetch
     return () => unsubscribe();
-  }, [router, courseId]);
+  }, [courseId, fetchCourseAndReviews]);
+
 
   if (isLoadingPage || course === undefined) {
     return (
@@ -78,7 +105,8 @@ export default function CourseDetailPage() {
     );
   }
 
-  if (!currentUser) return null;
+  // No separate check for currentUser here as we want to display course details even if not logged in
+  // Login is required only for submitting a review.
 
   if (!course) {
     return (
@@ -138,7 +166,6 @@ export default function CourseDetailPage() {
             </CardHeader>
           </Card>
 
-          {/* Module List Section */}
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -157,7 +184,6 @@ export default function CourseDetailPage() {
                           <BookOpen className="mr-3 h-5 w-5 text-primary/80" />
                           <div>
                             <span className="font-medium">Module {module.order}: {module.title}</span>
-                            {/* Future: Add module description or status here */}
                           </div>
                         </Link>
                       </Button>
@@ -169,13 +195,61 @@ export default function CourseDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Reviews Section */}
+          <Separator className="my-8"/>
+          <section id="reviews" className="space-y-6">
+            <h2 className="text-2xl font-semibold flex items-center">
+              <MessageSquare className="mr-2 h-6 w-6 text-primary"/>
+              Student Reviews ({reviews.length})
+            </h2>
+            {currentUser && (
+              <Card className="shadow-md">
+                <CardHeader><CardTitle>Write a Review</CardTitle></CardHeader>
+                <CardContent>
+                  <AddReviewForm courseId={course.id} currentUser={currentUser} onReviewSubmitted={fetchCourseAndReviews} />
+                </CardContent>
+              </Card>
+            )}
+            {!currentUser && (
+                <p className="text-muted-foreground p-4 border rounded-md bg-muted/50">
+                    <Link href={`/auth/login?redirect=/courses/${courseId}#reviews`} className="text-primary hover:underline">Login</Link> to write a review.
+                </p>
+            )}
+
+            {isLoadingReviews ? (
+                <div className="flex justify-center items-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /> <span className="ml-2">Loading reviews...</span></div>
+            ) : reviews.length > 0 ? (
+              <div className="space-y-4">
+                {reviews.map(review => (
+                  <Card key={review.id} className="bg-card/60">
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                           <CardTitle className="text-md">{review.userName}</CardTitle>
+                           <CardDescription className="text-xs">{review.createdAt}</CardDescription>
+                        </div>
+                        <div className="flex items-center">
+                          {[...Array(5)].map((_, i) => (
+                            <StarIcon key={i} className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />
+                          ))}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-foreground/80">{review.comment}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground py-6 text-center">No reviews yet for this course. Be the first to write one!</p>
+            )}
+          </section>
+
         </div>
 
         <aside className="lg:col-span-1 space-y-6">
-          {/* "Next Steps" or other relevant info can go here.
-              For now, this section might be less relevant without a course-level quiz.
-              It could show overall course progress once module completion is tracked.
-          */}
            <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -186,9 +260,7 @@ export default function CourseDetailPage() {
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 This course consists of {sortedModules.length} module(s).
-                Complete all modules to master the content.
               </p>
-              {/* Placeholder for future progress bar or certificate info if applicable */}
             </CardContent>
           </Card>
         </aside>

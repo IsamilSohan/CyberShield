@@ -11,19 +11,19 @@ export interface User {
 }
 
 export interface ContentBlock {
-  id: string; // Unique ID for the content block
+  id: string; 
   type: 'text' | 'image' | 'video';
-  value: string; // For text: the actual text. For image/video: the URL.
+  value: string; 
   order: number;
-  imageHint?: string; // Optional hint for AI if type is image
+  imageHint?: string; 
 }
 
 export interface Module {
-  id: string; // Unique identifier for the module
+  id: string; 
   title: string;
-  order: number; // For sequencing within the course
+  order: number; 
   contentBlocks: ContentBlock[];
-  quizId?: string; // Optional: ID of the quiz associated with this module
+  quizId?: string; 
 }
 
 export interface Course {
@@ -35,31 +35,33 @@ export interface Course {
   imageHint?: string;
   prerequisites?: string[];
   modules: Module[];
+  // quizId is now per module
 }
 
 export interface QuizQuestion {
-  id: string; // Unique ID for the question
+  id: string; 
   questionText: string;
-  options: string[]; // Array of answer options
-  correctAnswerIndex: number; // Index of the correct answer in the options array
+  options: string[]; 
+  correctAnswerIndex: number; 
+  explanation?: string; // Optional explanation for the answer
 }
 
 export interface Quiz {
   id: string;
   title: string;
-  courseId: string;
-  moduleId?: string;
+  courseId: string; 
+  moduleId?: string; // To link quiz to a specific module if needed
   questions: QuizQuestion[];
 }
 
 export interface Certificate {
-  id: string; // Unique certificate ID
+  id: string; 
   courseId: string;
-  courseTitle: string;
+  courseTitle: string; 
   userId: string;
   userName: string;
-  issueDate: string; // ISO date string
-  certificateUrl?: string; // Optional URL to a visual certificate image/pdf
+  issueDate: string; 
+  certificateUrl?: string; 
 }
 
 export const NewCourseSchema = z.object({
@@ -72,17 +74,15 @@ export const NewCourseSchema = z.object({
 });
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
 
-
-// --- Blog Post Types ---
 export interface BlogPost {
   id: string;
-  title: string; // Header
-  subHeader?: string; // Optional sub-header
-  content: string; // Main content (can be markdown or HTML string)
-  imageUrl: string; // Main picture URL
-  imageHint?: string; // Optional AI hint for the main picture
-  createdAt: string; // ISO date string
-  updatedAt: string; // ISO date string
+  title: string; 
+  subHeader?: string; 
+  content: string; 
+  imageUrl: string; 
+  imageHint?: string; 
+  createdAt: string; 
+  updatedAt: string; 
 }
 
 export const NewBlogPostSchema = z.object({
@@ -93,3 +93,23 @@ export const NewBlogPostSchema = z.object({
   imageHint: z.string().max(50, "Image hint should be concise (max 50 chars).").optional(),
 });
 export type NewBlogPostInput = z.infer<typeof NewBlogPostSchema>;
+
+// --- Course Review Types ---
+export const NewReviewSchema = z.object({
+  rating: z.number().min(1, "Rating must be between 1 and 5.").max(5, "Rating must be between 1 and 5."),
+  comment: z.string().min(10, "Comment must be at least 10 characters.").max(1000, "Comment must be 1000 characters or less."),
+  courseId: z.string(),
+  userId: z.string(),
+  // userName will be fetched server-side based on userId
+});
+export type NewReviewInput = z.infer<typeof NewReviewSchema>;
+
+export interface Review {
+  id: string;
+  courseId: string;
+  userId: string;
+  userName: string; // To display who wrote the review
+  rating: number; // e.g., 1-5
+  comment: string;
+  createdAt: string; // ISO date string
+}
