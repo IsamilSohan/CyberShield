@@ -1,22 +1,22 @@
 import type {Metadata} from 'next';
-import { Geist, Geist_Mono } from 'next/font/google'; // Corrected import
+import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import { Toaster } from "@/components/ui/toaster"; // For toast notifications
+import { Toaster } from "@/components/ui/toaster"; 
 
-const geistSans = Geist({ // Corrected instantiation
+const geistSans = Geist({ 
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({ // Corrected instantiation
+const geistMono = Geist_Mono({ 
   variable: '--font-geist-mono',
   subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
-  title: 'Cyber Shield Defender',
+  title: 'Cyber Shield', // Updated app name
   description: 'Your path to cybersecurity mastery.',
 };
 

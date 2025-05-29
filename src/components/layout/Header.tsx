@@ -8,10 +8,10 @@ import { APP_NAME, NAV_LINKS } from '@/lib/constants';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
-import { auth, db } from '@/lib/firebase'; // Import Firebase auth and db
+import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
-import type { User } from '@/lib/types'; // Import User type
+import { doc, getDoc } from 'firebase/firestore';
+import type { User } from '@/lib/types';
 
 export function Header() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -23,13 +23,12 @@ export function Header() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        // Fetch user document from Firestore to check isAdmin status
         try {
           const userRef = doc(db, "users", user.uid);
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
-            const userData = userSnap.data() as User; // Cast to your User type
-            setIsAdmin(userData.isAdmin === true); // Check for isAdmin field
+            const userData = userSnap.data() as User;
+            setIsAdmin(userData.isAdmin === true);
           } else {
             console.warn("User document not found in Firestore for UID:", user.uid);
             setIsAdmin(false);
@@ -42,14 +41,14 @@ export function Header() {
         setIsAdmin(false);
       }
     });
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setIsAdmin(false); // Reset admin status on logout
-      router.push('/auth/login'); // Redirect to login after logout
+      setIsAdmin(false);
+      router.push('/auth/login');
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -61,17 +60,17 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <span className="h-8 w-8 text-primary">
+          <span className="h-10 w-20 text-primary"> {/* Logo size and width increased */}
           <svg
             version="1.0"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 1024 1024"
             preserveAspectRatio="xMidYMid meet"
-            className="h-full w-full"
-            fill="currentColor"
+            className="h-full w-full" // SVG will fill the span
+            fill="currentColor" // Allows text-primary to color the SVG
           >
               <g transform="translate(0,1024) scale(0.1,-0.1)"
-                stroke="none"
+                // Removed fill="#000000" to allow currentColor to take effect
               >
                 <path d="M2525 7088 c-62 -36 -438 -193 -635 -265 -188 -68 -437 -132 -722
 -184 -192 -35 -190 -29 -189 -503 1 -886 170 -1438 590 -1930 144 -169 400
@@ -253,5 +252,3 @@ l-189 0 0 -516z m476 298 c105 -54 160 -200 135 -354 -29 -177 -116 -252 -305
     </header>
   );
 }
-
-    

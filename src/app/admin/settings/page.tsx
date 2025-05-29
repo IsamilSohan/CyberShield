@@ -1,11 +1,12 @@
 
 import Link from 'next/link';
-import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react'; // Renamed to avoid conflict
+import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { APP_NAME } from '@/lib/constants'; // Import APP_NAME
 
 export default function AdminSettingsPage() {
   return (
@@ -26,7 +27,7 @@ export default function AdminSettingsPage() {
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="appName">Application Name</Label>
-            <Input id="appName" defaultValue="Cyber Shield Defender" />
+            <Input id="appName" defaultValue={APP_NAME} /> {/* Use APP_NAME constant */}
             <p className="text-sm text-muted-foreground">
               This name will be displayed in the header and other places.
             </p>
