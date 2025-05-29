@@ -60,18 +60,17 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <span className="h-10 w-20 text-primary"> {/* Logo size and width increased */}
-          <svg
-            version="1.0"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 1024 1024"
-            preserveAspectRatio="xMidYMid meet"
-            className="h-full w-full" // SVG will fill the span
-            fill="currentColor" // Allows text-primary to color the SVG
-          >
-              <g transform="translate(0,1024) scale(0.1,-0.1)"
-                // Removed fill="#000000" to allow currentColor to take effect
-              >
+          <span className="h-12 w-24 text-primary"> {/* Logo container size increased */}
+            <svg
+              version="1.0"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 1024 1024"
+              preserveAspectRatio="xMidYMid meet"
+              className="h-full w-full"
+              fill="currentColor"
+            >
+              <g transform="translate(0.000000,1024.000000) scale(0.120000,-0.120000)" // Internal scale increased
+                stroke="none">
                 <path d="M2525 7088 c-62 -36 -438 -193 -635 -265 -188 -68 -437 -132 -722
 -184 -192 -35 -190 -29 -189 -503 1 -886 170 -1438 590 -1930 144 -169 400
 -382 632 -526 136 -85 340 -190 367 -190 26 0 238 105 354 175 51 32 140 91
@@ -252,3 +251,5 @@ l-189 0 0 -516z m476 298 c105 -54 160 -200 135 -354 -29 -177 -116 -252 -305
     </header>
   );
 }
+
+    
