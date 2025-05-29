@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Info, Loader2, BookOpen, ListChecks, MessageSquare, StarIcon } from 'lucide-react';
+import { ArrowLeft, Info, Loader2, BookOpen, MessageSquare, StarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { AddReviewForm } from '@/components/reviews/AddReviewForm';
 import { format } from 'date-fns';
-
+import { VideoPlayer } from '@/components/courses/VideoPlayer'; // Keep for modules
 
 export default function CourseDetailPage() {
   const router = useRouter();
@@ -39,7 +39,6 @@ export default function CourseDetailPage() {
     setIsLoadingPage(true);
     setIsLoadingReviews(true);
     try {
-      // Fetch course
       const courseRef = doc(db, "courses", courseId as string);
       const courseSnap = await getDoc(courseRef);
       if (courseSnap.exists()) {
@@ -49,7 +48,7 @@ export default function CourseDetailPage() {
           title: data.title || 'Untitled Course',
           description: data.description || '',
           longDescription: data.longDescription || '',
-          imageUrl: data.imageUrl || 'https://placehold.co/600x400.png',
+          imageUrl: data.imageUrl || 'https://placehold.co/1200x500.png',
           imageHint: data.imageHint || 'education technology',
           prerequisites: Array.isArray(data.prerequisites) ? data.prerequisites : [],
           modules: Array.isArray(data.modules) ? data.modules.sort((a: Module, b: Module) => a.order - b.order) : [],
@@ -58,7 +57,6 @@ export default function CourseDetailPage() {
         setCourse(null);
       }
 
-      // Fetch reviews
       const reviewsQuery = query(
         collection(db, "reviews"),
         where("courseId", "==", courseId),
@@ -84,7 +82,7 @@ export default function CourseDetailPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user); // Set current user for review form
+      setCurrentUser(user); 
       if (!user) {
         // If course access strictly requires login, redirect here.
         // For now, allow viewing course, but review form will be disabled.
@@ -104,9 +102,6 @@ export default function CourseDetailPage() {
       </div>
     );
   }
-
-  // No separate check for currentUser here as we want to display course details even if not logged in
-  // Login is required only for submitting a review.
 
   if (!course) {
     return (
@@ -129,47 +124,55 @@ export default function CourseDetailPage() {
         Back to Courses
       </Link>
 
-      <header className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold mb-2">{course.title}</h1>
-        {course.description && <p className="text-lg text-muted-foreground">{course.description}</p>}
-      </header>
+      {/* Main Course Info Card - Image, Title, Description, Long Desc, Prerequisites */}
+      <Card className="shadow-xl overflow-hidden"> {/* overflow-hidden for rounded image corners */}
+        <div className="relative">
+          <Image
+            src={course.imageUrl}
+            alt={course.title}
+            width={1200} // Increased width
+            height={500} // Increased height for a more banner-like feel
+            className="w-full h-auto object-cover" // Removed rounded-t-lg if card is overflow-hidden
+            data-ai-hint={course.imageHint || "education learning"}
+            priority // Prioritize loading the main course image
+          />
+        </div>
+        <CardHeader className="pt-6"> {/* Added pt-6 for spacing after image */}
+          <CardTitle className="text-3xl sm:text-4xl font-bold mb-2">{course.title}</CardTitle>
+          {course.description && ( // This is the "subheader"
+            <CardDescription className="text-lg text-muted-foreground">
+              {course.description}
+            </CardDescription>
+          )}
+        </CardHeader>
+        <CardContent>
+          {course.longDescription && (
+            <div className="prose dark:prose-invert max-w-none mb-6">
+              <p>{course.longDescription}</p>
+            </div>
+          )}
+          {course.prerequisites && course.prerequisites.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-md font-semibold mb-2 flex items-center">
+                <Info className="w-5 h-5 mr-2 text-primary"/>Prerequisites:
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {course.prerequisites.map((prereq, index) => (
+                  <Badge key={index} variant="secondary">{prereq}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="shadow-xl mb-8">
-             <CardHeader>
-                <div className="grid md:grid-cols-3 gap-6 items-start">
-                    <div className="md:col-span-1">
-                        <Image
-                        src={course.imageUrl}
-                        alt={course.title}
-                        width={600}
-                        height={400}
-                        className="rounded-lg object-cover w-full shadow-md"
-                        data-ai-hint={course.imageHint || "education learning"}
-                        />
-                    </div>
-                    <div className="md:col-span-2">
-                        {course.longDescription && <p className="text-foreground/80 mb-4">{course.longDescription}</p>}
-                        {course.prerequisites && course.prerequisites.length > 0 && (
-                        <div className="mb-4">
-                            <h3 className="text-md font-semibold mb-2 flex items-center"><Info className="w-5 h-5 mr-2 text-primary"/>Prerequisites:</h3>
-                            <div className="flex flex-wrap gap-2">
-                            {course.prerequisites.map((prereq, index) => (
-                                <Badge key={index} variant="secondary">{prereq}</Badge>
-                            ))}
-                            </div>
-                        </div>
-                        )}
-                    </div>
-                </div>
-            </CardHeader>
-          </Card>
-
+          {/* Modules Section */}
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center">
-                <ListChecks className="mr-2 h-5 w-5 text-primary" />
+                <BookOpen className="mr-2 h-5 w-5 text-primary" />
                 Course Modules
               </CardTitle>
               <CardDescription>Select a module to begin learning.</CardDescription>
@@ -250,6 +253,7 @@ export default function CourseDetailPage() {
         </div>
 
         <aside className="lg:col-span-1 space-y-6">
+           {/* This card can be repurposed or removed if not needed */}
            <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -261,6 +265,7 @@ export default function CourseDetailPage() {
               <p className="text-sm text-muted-foreground">
                 This course consists of {sortedModules.length} module(s).
               </p>
+              {/* You can add more course metadata here if needed */}
             </CardContent>
           </Card>
         </aside>
@@ -268,3 +273,4 @@ export default function CourseDetailPage() {
     </div>
   );
 }
+
