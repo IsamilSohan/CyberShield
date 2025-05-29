@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, updateDoc, setDoc, writeBatch, collection } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import type { Course, Module, ContentBlock, Quiz, QuizQuestion } from '@/lib/types';
+import type { Course, Module, ContentBlock, Quiz } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 
@@ -31,7 +31,6 @@ export default function EditCoursePage() {
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
-  const [quiz, setQuiz] = useState<Quiz | null>(null); // For managing the quiz associated with the course
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,13 +42,12 @@ export default function EditCoursePage() {
   const [courseImageUrl, setCourseImageUrl] = useState('');
   const [courseImageHint, setCourseImageHint] = useState('');
   const [coursePrerequisites, setCoursePrerequisites] = useState('');
-  // const [courseVideoUrl, setCourseVideoUrl] = useState(''); // Removed as videos are per module
 
   // Modules state
   const [courseModules, setCourseModules] = useState<Module[]>([]);
   const [newModuleTitle, setNewModuleTitle] = useState('');
 
-  // New content block state (per module, managed when a module accordion is open)
+  // New content block state
   const [newContentBlockType, setNewContentBlockType] = useState<'text' | 'image' | 'video'>('text');
   const [newContentBlockValue, setNewContentBlockValue] = useState('');
   const [newContentBlockImageHint, setNewContentBlockImageHint] = useState('');
@@ -74,7 +72,7 @@ export default function EditCoursePage() {
     setIsLoading(true);
     setError(null);
 
-    const fetchCourseAndQuiz = async () => {
+    const fetchCourseData = async () => {
       try {
         const courseRef = doc(db, 'courses', courseId as string);
         const courseSnap = await getDoc(courseRef);
@@ -82,7 +80,6 @@ export default function EditCoursePage() {
         if (!courseSnap.exists()) {
           setError('Course not found.');
           setCourse(null);
-          setQuiz(null);
           setIsLoading(false);
           return;
         }
@@ -93,7 +90,7 @@ export default function EditCoursePage() {
           ...fetchedCourseData,
           modules: (fetchedCourseData.modules || []).map((m: any) => ({
             ...m,
-            contentBlocks: m.contentBlocks || [] // Ensure contentBlocks is an array
+            contentBlocks: m.contentBlocks || [] 
           }))
         } as Course;
         setCourse(fetchedCourse);
@@ -106,23 +103,20 @@ export default function EditCoursePage() {
         setCoursePrerequisites(
           Array.isArray(fetchedCourse.prerequisites)
             ? fetchedCourse.prerequisites.join(', ')
-            : ''
+            : (fetchedCourse.prerequisites as string || '') // Handle if it's already a string
         );
         setCourseModules(fetchedCourse.modules ? fetchedCourse.modules.sort((a, b) => a.order - b.order) : []);
-
-        // Removed course-level quiz fetching. Quiz handling is now per module.
 
       } catch (e) {
         console.error("Error fetching course for edit:", e);
         setError('Failed to load course data.');
-        setQuiz(null); // Also set quiz to null on error
       } finally {
         setIsLoading(false);
       }
     };
 
     if (currentUser) {
-      fetchCourseAndQuiz();
+      fetchCourseData();
     }
   }, [courseId, currentUser]);
 
@@ -209,45 +203,42 @@ export default function EditCoursePage() {
         let newQuizData: Quiz | null = null;
 
         if (!quizIdToLink) {
-            quizIdToLink = generateId(); // Generate new quiz ID
+            quizIdToLink = generateId(); 
             newQuizData = {
                 id: quizIdToLink,
                 title: `Quiz for ${courseModules[moduleIndex].title}`,
                 courseId: course.id,
                 moduleId: moduleId,
                 questions: [
-                    { id: generateId(), questionText: "Sample Question 1: What is the capital of France?", options: ["Berlin", "Madrid", "Paris", "Rome"], correctAnswerIndex: 2 }
+                    { id: generateId(), questionText: "Sample Question 1: What is ...?", options: ["Option A", "Option B", "Option C"], correctAnswerIndex: 0 }
                 ],
             };
         }
 
-        // Update local state first
         const updatedModules = courseModules.map(m =>
             m.id === moduleId ? { ...m, quizId: quizIdToLink } : m
         );
-        setCourseModules(updatedModules);
+        setCourseModules(updatedModules); // Update local state first
 
-        // Prepare Firestore batch
         const batch = writeBatch(db);
         const courseRef = doc(db, 'courses', course.id);
         
-        // Update course document with new quizId for the module
         batch.update(courseRef, { modules: updatedModules });
 
         if (newQuizData) {
             const quizRef = doc(db, 'quizzes', quizIdToLink);
-            batch.set(quizRef, newQuizData); // Create new quiz document
+            batch.set(quizRef, newQuizData); 
         }
         
         await batch.commit();
 
         if (newQuizData) {
-          toast({ title: "New Quiz Created & Linked", description: `Quiz for "${courseModules[moduleIndex].title}" created and linked.` });
+          toast({ title: "New Quiz Created & Linked", description: `Quiz for "${courseModules[moduleIndex].title}" created. Edit its questions.` });
         } else {
-          toast({ title: "Quiz Linked", description: `Existing Quiz ID ${quizIdToLink} ensured for "${courseModules[moduleIndex].title}".` });
+          toast({ title: "Quiz Linked", description: `Quiz ID ${quizIdToLink} ensured for "${courseModules[moduleIndex].title}".` });
         }
-        // TODO: Redirect to a quiz editing page: router.push(`/admin/quizzes/${quizIdToLink}/edit`);
-        toast({ title: "Quiz Management", description: `Quiz ID ${quizIdToLink} linked. Actual quiz question editing UI is not yet implemented on a separate page.`});
+        // Navigate to the new quiz editing page
+        router.push(`/admin/quizzes/${quizIdToLink}/edit?courseId=${course.id}`);
         
     } catch (e: any) {
         console.error("Error linking/creating module quiz:", e);
@@ -263,7 +254,7 @@ export default function EditCoursePage() {
                 m.id === moduleId ? { ...m, quizId: undefined } : m
             )
         );
-     toast({ title: "Quiz Unlinked Locally", description: "Save changes to persist this." });
+     toast({ title: "Quiz Unlinked Locally", description: "Save all course changes to persist this." });
   };
 
 
@@ -294,10 +285,6 @@ export default function EditCoursePage() {
       };
       batch.update(courseRef, courseUpdates as Record<string, any>);
       
-      // Note: Individual quiz documents are created/updated in handleLinkOrCreateQuizForModule
-      // This save operation primarily ensures the course document itself is up-to-date.
-      // If a module's quizId was just unlinked locally, this save will persist that undefined quizId.
-
       await batch.commit();
       toast({ title: "Success", description: "Course updated successfully!" });
       router.push('/admin/courses');
@@ -393,7 +380,7 @@ export default function EditCoursePage() {
                           variant="destructive"
                           size="icon"
                           onClick={(e) => {
-                            e.stopPropagation(); // Important to prevent accordion toggle
+                            e.stopPropagation(); 
                             handleRemoveModule(mod.id);
                           }}
                           aria-label={`Remove module ${mod.title}`}
@@ -455,12 +442,14 @@ export default function EditCoursePage() {
                         {mod.quizId ? (
                             <div className="flex items-center gap-2">
                                 <p className="text-sm text-muted-foreground">Linked Quiz ID: {mod.quizId}</p>
-                                <Button variant="outline" size="sm" onClick={() => toast({title: "Quiz Editing", description: "Quiz question editing UI not yet implemented on a separate page. Manage directly in Firestore for now."})} >Edit Quiz Questions</Button>
+                                <Button variant="outline" size="sm" asChild>
+                                   <Link href={`/admin/quizzes/${mod.quizId}/edit?courseId=${courseId}`}>Edit Quiz Questions</Link>
+                                </Button>
                                 <Button variant="link" size="sm" onClick={() => handleUnlinkQuizFromModule(mod.id)}>Unlink Quiz</Button>
                             </div>
                         ) : (
                             <Button onClick={() => handleLinkOrCreateQuizForModule(mod.id)} size="sm" disabled={isSaving}>
-                                {isSaving && module.id === courseModules.find(m => m.id === mod.id && m.quizId === undefined)?.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                                {isSaving && courseModules.find(m => m.id === mod.id && m.quizId === undefined)?.id  ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                                 Create & Link Quiz
                             </Button>
                         )}
@@ -496,6 +485,3 @@ export default function EditCoursePage() {
     </div>
   );
 }
-
-
-    

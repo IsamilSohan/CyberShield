@@ -45,19 +45,17 @@ export interface QuizQuestion {
 }
 
 export interface Quiz {
-  id:string; // Should match the module.quizId or course.quizId
-  title: string; // e.g., "Quiz for Module 1: Introduction"
-  courseId: string; // To know which course this quiz belongs to
-  moduleId?: string; // To know which module this quiz belongs to (if module-specific)
+  id: string; 
+  title: string; 
+  courseId: string; 
+  moduleId?: string; 
   questions: QuizQuestion[];
 }
 
 export interface Certificate {
   id: string; // Unique certificate ID
   courseId: string;
-  courseTitle: string; // Keep course title on certificate for display
-  // moduleId?: string; // If certificates become module-specific
-  // moduleTitle?: string;
+  courseTitle: string; 
   userId: string;
   userName: string;
   issueDate: string; // ISO date string
@@ -69,8 +67,16 @@ export const NewCourseSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters."),
   longDescription: z.string().optional(),
   imageUrl: z.string().url({ message: "Image URL must be a valid URL if provided." }).or(z.literal('')).optional(),
-  imageHint: z.string().max(50, "Image hint should be concise (max 50 chars).").optional(), // Increased limit slightly
+  imageHint: z.string().max(50, "Image hint should be concise (max 50 chars).").optional(),
   prerequisites: z.string().optional(),
+})
+.refine(data => {
+    // This refinement is somewhat redundant now that module title/URL are removed from initial creation
+    // but kept for potential future complex validations.
+    return true; 
+}, {
+  message: "Validation logic placeholder for NewCourseSchema.", // Generic message
+  path: [], // No specific path, applies to the whole object
 });
 
 export type NewCourseInput = z.infer<typeof NewCourseSchema>;
