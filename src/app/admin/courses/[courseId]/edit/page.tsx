@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ArrowLeft, Edit3, Save, Loader2, AlertTriangle, PlusCircle, Trash2, BookOpen, FileText, Image as ImageIcon, Video, GripVertical, ListChecks } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, Loader2, AlertTriangle, PlusCircle, Trash2, BookOpen, FileText, Image as ImageIcon, Video as VideoIcon, GripVertical, ListChecks } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,7 @@ export default function EditCoursePage() {
 
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
+  const [quiz, setQuiz] = useState<Quiz | null>(null); // For managing the quiz associated with the course
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function EditCoursePage() {
   const [courseImageUrl, setCourseImageUrl] = useState('');
   const [courseImageHint, setCourseImageHint] = useState('');
   const [coursePrerequisites, setCoursePrerequisites] = useState('');
+  // const [courseVideoUrl, setCourseVideoUrl] = useState(''); // Removed as videos are per module
 
   // Modules state
   const [courseModules, setCourseModules] = useState<Module[]>([]);
@@ -72,7 +74,7 @@ export default function EditCoursePage() {
     setIsLoading(true);
     setError(null);
 
-    const fetchCourseData = async () => {
+    const fetchCourseAndQuiz = async () => {
       try {
         const courseRef = doc(db, 'courses', courseId as string);
         const courseSnap = await getDoc(courseRef);
@@ -80,6 +82,7 @@ export default function EditCoursePage() {
         if (!courseSnap.exists()) {
           setError('Course not found.');
           setCourse(null);
+          setQuiz(null);
           setIsLoading(false);
           return;
         }
@@ -107,16 +110,19 @@ export default function EditCoursePage() {
         );
         setCourseModules(fetchedCourse.modules ? fetchedCourse.modules.sort((a, b) => a.order - b.order) : []);
 
+        // Removed course-level quiz fetching. Quiz handling is now per module.
+
       } catch (e) {
         console.error("Error fetching course for edit:", e);
         setError('Failed to load course data.');
+        setQuiz(null); // Also set quiz to null on error
       } finally {
         setIsLoading(false);
       }
     };
 
     if (currentUser) {
-      fetchCourseData();
+      fetchCourseAndQuiz();
     }
   }, [courseId, currentUser]);
 
@@ -168,7 +174,7 @@ export default function EditCoursePage() {
     setCourseModules(prevModules =>
       prevModules.map(module =>
         module.id === moduleId
-          ? { ...module, contentBlocks: [...module.contentBlocks, newBlock].sort((a,b) => a.order - b.order) }
+          ? { ...module, contentBlocks: [...(module.contentBlocks || []), newBlock].sort((a,b) => a.order - b.order) }
           : module
       )
     );
@@ -182,7 +188,7 @@ export default function EditCoursePage() {
       prevModules.map(module =>
         module.id === moduleId
           ? {
-            ...module, contentBlocks: module.contentBlocks
+            ...module, contentBlocks: (module.contentBlocks || [])
               .filter(block => block.id !== blockIdToRemove)
               .map((block, index) => ({ ...block, order: index + 1 }))
           }
@@ -192,51 +198,66 @@ export default function EditCoursePage() {
     toast({ title: "Content Block Removed Locally", description: "Save changes to persist." });
   };
   
-  const handleLinkOrCreateQuiz = async (moduleId: string) => {
+  const handleLinkOrCreateQuizForModule = async (moduleId: string) => {
     if (!course) return;
-    const module = courseModules.find(m => m.id === moduleId);
-    if (!module) return;
+    const moduleIndex = courseModules.findIndex(m => m.id === moduleId);
+    if (moduleIndex === -1) return;
 
     setIsSaving(true);
     try {
-        let quizIdToLink = module.quizId;
+        let quizIdToLink = courseModules[moduleIndex].quizId;
+        let newQuizData: Quiz | null = null;
+
         if (!quizIdToLink) {
-            // Create a new quiz document
-            quizIdToLink = generateId();
-            const newQuizData: Quiz = {
+            quizIdToLink = generateId(); // Generate new quiz ID
+            newQuizData = {
                 id: quizIdToLink,
-                title: `Quiz for ${module.title}`,
+                title: `Quiz for ${courseModules[moduleIndex].title}`,
                 courseId: course.id,
-                moduleId: module.id,
+                moduleId: moduleId,
                 questions: [
-                    { id: generateId(), questionText: "Sample Question 1: What is 2+2?", options: ["3", "4", "5"], correctAnswerIndex: 1 }
+                    { id: generateId(), questionText: "Sample Question 1: What is the capital of France?", options: ["Berlin", "Madrid", "Paris", "Rome"], correctAnswerIndex: 2 }
                 ],
             };
-            await setDoc(doc(db, 'quizzes', quizIdToLink), newQuizData);
-            toast({ title: "New Quiz Created", description: `Quiz for "${module.title}" created with ID: ${quizIdToLink}.` });
         }
 
-        setCourseModules(prevModules =>
-            prevModules.map(m =>
-                m.id === moduleId ? { ...m, quizId: quizIdToLink } : m
-            )
+        // Update local state first
+        const updatedModules = courseModules.map(m =>
+            m.id === moduleId ? { ...m, quizId: quizIdToLink } : m
         );
-        // Automatically save this change
-        await handleSaveChanges(false); // Pass false to prevent router push for this specific save
+        setCourseModules(updatedModules);
+
+        // Prepare Firestore batch
+        const batch = writeBatch(db);
+        const courseRef = doc(db, 'courses', course.id);
         
-        if(quizIdToLink) {
-          // router.push(`/admin/quizzes/${quizIdToLink}/edit`); // TODO: Create this page
-           toast({ title: "Quiz Management", description: `Quiz ID ${quizIdToLink} linked. Quiz editing page not yet implemented.`});
+        // Update course document with new quizId for the module
+        batch.update(courseRef, { modules: updatedModules });
+
+        if (newQuizData) {
+            const quizRef = doc(db, 'quizzes', quizIdToLink);
+            batch.set(quizRef, newQuizData); // Create new quiz document
         }
+        
+        await batch.commit();
+
+        if (newQuizData) {
+          toast({ title: "New Quiz Created & Linked", description: `Quiz for "${courseModules[moduleIndex].title}" created and linked.` });
+        } else {
+          toast({ title: "Quiz Linked", description: `Existing Quiz ID ${quizIdToLink} ensured for "${courseModules[moduleIndex].title}".` });
+        }
+        // TODO: Redirect to a quiz editing page: router.push(`/admin/quizzes/${quizIdToLink}/edit`);
+        toast({ title: "Quiz Management", description: `Quiz ID ${quizIdToLink} linked. Actual quiz question editing UI is not yet implemented on a separate page.`});
+        
     } catch (e: any) {
-        console.error("Error linking/creating quiz:", e);
-        toast({ title: "Quiz Error", description: `Failed to link/create quiz. ${e.message}`, variant: "destructive" });
+        console.error("Error linking/creating module quiz:", e);
+        toast({ title: "Quiz Error", description: `Failed to link/create module quiz. ${e.message}`, variant: "destructive" });
     } finally {
         setIsSaving(false);
     }
   };
 
-  const handleUnlinkQuiz = (moduleId: string) => {
+  const handleUnlinkQuizFromModule = (moduleId: string) => {
      setCourseModules(prevModules =>
             prevModules.map(m =>
                 m.id === moduleId ? { ...m, quizId: undefined } : m
@@ -246,16 +267,16 @@ export default function EditCoursePage() {
   };
 
 
-  const handleSaveChanges = async (pushRoute: boolean = true) => {
+  const handleSaveChanges = async () => {
     if (!course || !currentUser) {
       toast({ title: "Error", description: "Course data or user session missing.", variant: "destructive" });
       return;
     }
     setIsSaving(true);
+    const batch = writeBatch(db);
     try {
       const courseRef = doc(db, 'courses', course.id);
-      const batch = writeBatch(db);
-
+      
       const courseUpdates: Partial<Course> = {
         title: courseTitle,
         description: courseDescription,
@@ -263,18 +284,23 @@ export default function EditCoursePage() {
         imageUrl: courseImageUrl,
         imageHint: courseImageHint,
         prerequisites: coursePrerequisites.split(',').map(p => p.trim()).filter(p => p.length > 0),
-        modules: courseModules.map((mod, index) => ({ ...mod, order: index + 1 })),
+        modules: courseModules.map((mod, index) => ({ 
+            id: mod.id,
+            title: mod.title,
+            order: index + 1, 
+            contentBlocks: (mod.contentBlocks || []).map((cb, cbIndex) => ({...cb, order: cbIndex + 1})),
+            quizId: mod.quizId
+        })),
       };
       batch.update(courseRef, courseUpdates as Record<string, any>);
       
-      // Note: Individual quiz documents (if newly created via handleLinkOrCreateQuiz) are already saved.
-      // This save is primarily for the course document and its modules array.
+      // Note: Individual quiz documents are created/updated in handleLinkOrCreateQuizForModule
+      // This save operation primarily ensures the course document itself is up-to-date.
+      // If a module's quizId was just unlinked locally, this save will persist that undefined quizId.
 
       await batch.commit();
       toast({ title: "Success", description: "Course updated successfully!" });
-      if (pushRoute) {
-        router.push('/admin/courses');
-      }
+      router.push('/admin/courses');
     } catch (e: any) {
       console.error("Error saving course:", e);
       toast({ title: "Error Saving", description: `Failed to save changes. ${e.message || 'Unknown error'}`, variant: "destructive" });
@@ -358,21 +384,41 @@ export default function EditCoursePage() {
                 <AccordionItem value={`module-${mod.id}`} key={mod.id}>
                   <AccordionTrigger>
                     <div className="flex items-center justify-between w-full pr-4">
-                       <div className="flex items-center">
-                        <GripVertical className="h-5 w-5 mr-2 text-muted-foreground" />
+                       <div className="flex items-center flex-grow">
+                        <GripVertical className="h-5 w-5 mr-2 text-muted-foreground flex-shrink-0" />
                         Module {mod.order}: <Input value={mod.title} onChange={(e) => handleModuleTitleChange(mod.id, e.target.value)} className="ml-2 flex-grow min-w-[200px]" onClick={(e) => e.stopPropagation()} />
                        </div>
-                       <Button variant="destructive" size="icon" onClick={(e) => {e.stopPropagation(); handleRemoveModule(mod.id);}} aria-label={`Remove module ${mod.title}`} className="ml-2 p-1 h-7 w-7">
-                         <Trash2 className="h-4 w-4" />
-                       </Button>
+                       <Button
+                          asChild
+                          variant="destructive"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Important to prevent accordion toggle
+                            handleRemoveModule(mod.id);
+                          }}
+                          aria-label={`Remove module ${mod.title}`}
+                          className="ml-2 p-1 h-7 w-7 flex-shrink-0"
+                        >
+                          <span role="button" tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRemoveModule(mod.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </span>
+                        </Button>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pl-6 pr-2 py-4 bg-muted/20 rounded-b-md">
                     <div className="space-y-4">
-                      <h4 className="text-md font-semibold">Content Blocks ({mod.contentBlocks.length})</h4>
-                      {mod.contentBlocks.length > 0 && (
+                      <h4 className="text-md font-semibold">Content Blocks ({(mod.contentBlocks || []).length})</h4>
+                      {(mod.contentBlocks || []).length > 0 && (
                         <ul className="space-y-2">
-                          {mod.contentBlocks.map(block => (
+                          {(mod.contentBlocks || []).map(block => (
                             <li key={block.id} className="flex items-center gap-2 p-2 border rounded-md bg-background">
                               <span className="text-xs text-muted-foreground p-1 bg-muted rounded-sm">#{block.order} {block.type}</span>
                               <Input value={block.value} readOnly className="flex-grow text-xs" title={block.value}/>
@@ -398,7 +444,7 @@ export default function EditCoursePage() {
                            <Input placeholder="Enter URL..." value={newContentBlockValue} onChange={(e) => setNewContentBlockValue(e.target.value)} />
                         )}
                         {newContentBlockType === 'image' && (
-                          <Input placeholder="Image AI hint (optional)" value={newContentBlockImageHint} onChange={(e) => setNewContentBlockImageHint(e.target.value)} />
+                          <Input placeholder="Image AI hint (optional, max 2 words)" value={newContentBlockImageHint} onChange={(e) => setNewContentBlockImageHint(e.target.value)} />
                         )}
                         <Button onClick={() => handleAddContentBlock(mod.id)} size="sm">Add Block</Button>
                       </div>
@@ -409,12 +455,12 @@ export default function EditCoursePage() {
                         {mod.quizId ? (
                             <div className="flex items-center gap-2">
                                 <p className="text-sm text-muted-foreground">Linked Quiz ID: {mod.quizId}</p>
-                                <Button variant="outline" size="sm" onClick={() => toast({title: "Quiz Editing", description: "Quiz editing page not yet implemented. Please manage quiz questions directly in Firestore for now."})} >Edit Quiz</Button>
-                                <Button variant="link" size="sm" onClick={() => handleUnlinkQuiz(mod.id)}>Unlink Quiz</Button>
+                                <Button variant="outline" size="sm" onClick={() => toast({title: "Quiz Editing", description: "Quiz question editing UI not yet implemented on a separate page. Manage directly in Firestore for now."})} >Edit Quiz Questions</Button>
+                                <Button variant="link" size="sm" onClick={() => handleUnlinkQuizFromModule(mod.id)}>Unlink Quiz</Button>
                             </div>
                         ) : (
-                            <Button onClick={() => handleLinkOrCreateQuiz(mod.id)} size="sm" disabled={isSaving}>
-                                {isSaving && module.id === courseModules.find(m => m.quizId === undefined)?.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                            <Button onClick={() => handleLinkOrCreateQuizForModule(mod.id)} size="sm" disabled={isSaving}>
+                                {isSaving && module.id === courseModules.find(m => m.id === mod.id && m.quizId === undefined)?.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                                 Create & Link Quiz
                             </Button>
                         )}
@@ -439,7 +485,7 @@ export default function EditCoursePage() {
           </div>
 
           <div className="flex justify-end pt-6">
-            <Button onClick={() => handleSaveChanges()} disabled={isSaving}>
+            <Button onClick={handleSaveChanges} disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Save className="mr-2 h-4 w-4" />
               Save All Changes
@@ -450,3 +496,6 @@ export default function EditCoursePage() {
     </div>
   );
 }
+
+
+    
